@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: moyeobom
+  profiles:
+    default: local
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+# 가상 메이트 행동 규칙. 코드 수정 없이 조정할 수 있도록 설정으로 뺀다.
+moyeobom:
+  mate:
+    focus-duration:
+      min: 25m
+      max: 90m
+    break-duration:
+      min: 5m
+      max: 15m
+    complete-probability: 0.4
+    leave-probability: 0.2
+    refill-delay:
+      min: 30s
+      max: 2m
+    majority-focus-count: 5
+    focus-extension:
+      min: 5m
+      max: 10m
+    initial:
+      focus-ratio: 0.8
+      completed-count-max: 3
+      remaining-count-min: 1
+      remaining-count-max: 4

@@ -1,0 +1,4 @@
+# DB 접속 정보는 Testcontainers(@ServiceConnection)가 주입한다.
+logging:
+  level:
+    org.hibernate.SQL: debug

@@ -1,6 +1,7 @@
 package com.moyeobom.room.service;
 
 import com.moyeobom.focus.domain.MyStateChangedEvent;
+import com.moyeobom.sprint.domain.SprintClosedEvent;
 import com.moyeobom.task.domain.TaskCountsChangedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -23,5 +24,10 @@ public class RoomEventListener {
     @TransactionalEventListener(fallbackExecution = true)
     public void onCountsChanged(TaskCountsChangedEvent event) {
         roomService.changeMyCounts(event.guestId(), event.counts());
+    }
+
+    @TransactionalEventListener(fallbackExecution = true)
+    public void onSprintClosed(SprintClosedEvent event) {
+        roomService.closeRoomOf(event.guestId());
     }
 }

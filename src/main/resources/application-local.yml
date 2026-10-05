@@ -5,6 +5,10 @@ spring:
     url: jdbc:mysql://localhost:${DB_PORT:3306}/moyeobom
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+  # 로컬에서만 테스트 페이지(/dev.html)를 연다
+  web:
+    resources:
+      static-locations: classpath:/static/, classpath:/dev-static/
   jpa:
     properties:
       hibernate:

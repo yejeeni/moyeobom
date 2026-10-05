@@ -51,7 +51,7 @@ public abstract class IntegrationTestSupport {
             try (Statement statement = connection.createStatement()) {
                 statement.execute("SET FOREIGN_KEY_CHECKS = 0");
                 for (String table : TABLES) {
-                    statement.execute("TRUNCATE TABLE " + table);
+                    statement.execute("DELETE FROM " + table);
                 }
                 statement.execute("SET FOREIGN_KEY_CHECKS = 1");
             }

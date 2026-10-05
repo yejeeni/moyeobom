@@ -5,6 +5,7 @@ import com.moyeobom.common.exception.ErrorCode;
 import com.moyeobom.common.message.RefreshMessages;
 import com.moyeobom.common.time.Times;
 import com.moyeobom.focus.service.FocusQueryService;
+import com.moyeobom.focus.service.FocusService;
 import com.moyeobom.sprint.domain.Sprint;
 import com.moyeobom.sprint.service.SprintQueryService;
 import com.moyeobom.task.domain.Task;
@@ -34,6 +35,7 @@ public class TaskService {
     private final TaskQueryService taskQueryService;
     private final SprintQueryService sprintQueryService;
     private final FocusQueryService focusQueryService;
+    private final FocusService focusService;
     private final RefreshMessages refreshMessages;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
@@ -107,6 +109,7 @@ public class TaskService {
         sprintQueryService.lockOpenSprint(guestId);
         Task task = taskQueryService.getTaskInOpenSprint(guestId, taskId);
         task.complete(Times.now(clock));
+        focusService.endIfFocusingOn(guestId, taskId);
         taskRepository.flush();
         publishCounts(guestId, task.getSprintId());
         return new TaskCompleteResponse(taskQueryService.toResponse(task), refreshMessages.pick());

@@ -13,6 +13,7 @@ public enum ErrorCode {
     SPRINT_ALREADY_OPEN(HttpStatus.CONFLICT, "이미 진행 중인 스프린트가 있습니다."),
     SPRINT_NOT_FOUND(HttpStatus.NOT_FOUND, "진행 중인 스프린트가 없습니다."),
     TASK_NOT_FOUND(HttpStatus.NOT_FOUND, "할 일을 찾을 수 없습니다."),
+    TASK_ALREADY_DONE(HttpStatus.CONFLICT, "이미 완료한 할 일입니다."),
     TASK_HAS_RECORDS(HttpStatus.CONFLICT, "집중 기록이 있는 할 일은 삭제할 수 없습니다."),
     TASK_ALREADY_CARRIED(HttpStatus.CONFLICT, "이미 이월한 할 일입니다."),
     NO_TASK_FOR_ROOM(HttpStatus.CONFLICT, "할 일이 있어야 열람실에 입장할 수 있습니다."),

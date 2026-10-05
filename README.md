@@ -18,6 +18,17 @@ docker compose up -d        # MySQL 8.4
 
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - 헬스 체크: http://localhost:8080/actuator/health
+- PC에서 이미 MySQL이 3306을 쓰고 있으면 `.env`의 `DB_PORT`를 3307 등으로 바꾼다.
+
+## 프론트엔드 연동 요약
+
+1. `POST /api/v1/guests`로 받은 `guestId`를 브라우저에 저장하고, 모든 요청에 `X-Guest-Id` 헤더로 보낸다.
+2. `POST /api/v1/sprints` → `POST /api/v1/rooms/enter`로 `roomId`를 받는다.
+3. `/ws`에 STOMP로 연결한다(CONNECT 헤더 `X-Guest-Id`, heart-beat `10000,10000`).
+4. `/topic/rooms/{roomId}`를 먼저 구독하고, 이어서 `/user/queue/room-snapshot`, `/user/queue/notices`를 구독한다.
+   - 스냅샷 큐 구독 직후 `ROOM_SNAPSHOT`이 한 번 온다. 방이 없으면 `ROOM_NOT_FOUND`가 오며, 이때는 `POST /rooms/enter`를 다시 부른다.
+5. 모든 동작(집중, 휴식, 완료 등)은 REST로 보내고, 화면 변화는 이벤트로 받는다. 경과 시간은 `since`와 스냅샷의 `serverTime`으로 클라이언트가 계산한다.
+6. 오늘 마무리를 누르면 집중 중일 때 `POST /focus/stop`(`STOPPED`)을 먼저 보내고 `GET /sprints/current/review`를 조회한다.
 
 ## 테스트
 

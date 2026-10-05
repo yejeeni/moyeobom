@@ -24,6 +24,8 @@ moyeobom:
   cors:
     allowed-origins:
       - http://localhost:5173
+  room:
+    grace-period: 60s
   # 가상 메이트 행동 규칙. 코드 수정 없이 조정할 수 있도록 설정으로 뺀다.
   mate:
     focus-duration:

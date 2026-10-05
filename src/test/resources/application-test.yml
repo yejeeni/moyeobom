@@ -7,3 +7,4 @@ logging:
 moyeobom:
   focus:
     stale-check-interval: PT24H
+    heartbeat-interval: PT24H

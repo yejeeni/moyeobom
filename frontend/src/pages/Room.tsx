@@ -1,0 +1,270 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { api } from '../api'
+import { isApiError } from '../api/client'
+import type { MyStatus, Task } from '../api/types'
+import { GuideModal } from '../components/GuideModal'
+import { SeatTile } from '../components/SeatTile'
+import { SettingsModal } from '../components/SettingsModal'
+import { TaskPanel } from '../components/TaskPanel'
+import { useToast } from '../components/Toasts'
+import { getGuestId } from '../lib/guest'
+import { STATE_LABEL, elapsedSeconds, formatClock, useNow } from '../lib/time'
+import { useMediaQuery } from '../lib/useMediaQuery'
+import { useRoom } from '../room/RoomContext'
+
+const SEAT_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+export function Room() {
+  const navigate = useNavigate()
+  const toast = useToast()
+  const room = useRoom()
+  const now = useNow()
+  const compact = useMediaQuery('(max-width: 760px)')
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [myStatus, setMyStatus] = useState<MyStatus | null>(null)
+  const [statusOffset, setStatusOffset] = useState(0)
+  const [busy, setBusy] = useState(false)
+  // 넓은 화면에서는 기본으로 펼치고, 좁은 화면(컴팩트)에서는 접어 둔다
+  const [panelWide, setPanelWide] = useState(true)
+  const [panelCompact, setPanelCompact] = useState(false)
+  const panelOpen = compact ? panelCompact : panelWide
+  const setPanelOpen = compact ? setPanelCompact : setPanelWide
+  const [modal, setModal] = useState<'guide' | 'settings' | null>(null)
+
+  const applyStatus = useCallback((status: MyStatus) => {
+    setStatusOffset(Date.parse(status.serverTime) - Date.now())
+    setMyStatus(status)
+  }, [])
+
+  const loadTasks = useCallback(async () => {
+    const { sprint } = await api.currentSprint()
+    if (!sprint) {
+      navigate('/plan', { replace: true })
+      return
+    }
+    setTasks(sprint.tasks)
+  }, [navigate])
+
+  const loadAll = useCallback(async () => {
+    await loadTasks()
+    applyStatus(await api.currentFocus())
+  }, [loadTasks, applyStatus])
+
+  // 입장: 할 일과 내 상태를 불러오고, 방이 없으면 들어간다
+  useEffect(() => {
+    if (!getGuestId()) {
+      navigate('/', { replace: true })
+      return
+    }
+    loadAll().catch((e) => toast.show((e as Error).message, 'error'))
+    if (!room.roomId) {
+      room.enter().catch((e) => {
+        if (isApiError(e, 'NO_TASK_FOR_ROOM')) navigate('/plan', { replace: true })
+        else toast.show((e as Error).message, 'error')
+      })
+    }
+    // 처음 한 번만 실행한다
+  }, [])
+
+  // 다시 연결되면 끊긴 동안 바뀐 내 상태(세션 자동 종료 등)를 다시 불러온다
+  useEffect(() => {
+    if (room.snapshotVersion > 1) loadAll().catch(() => {})
+  }, [room.snapshotVersion, loadAll])
+
+  const run = async (action: () => Promise<void>) => {
+    setBusy(true)
+    try {
+      await action()
+    } catch (e) {
+      toast.show((e as Error).message, 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const focus = (task: Task) =>
+    run(async () => {
+      applyStatus(await api.startFocus(task.taskId))
+      await loadTasks()
+    })
+
+  const stop = (reason: 'STOPPED' | 'BREAK') =>
+    run(async () => {
+      applyStatus(await api.stopFocus(reason))
+      await loadTasks()
+    })
+
+  const complete = (task: Task) =>
+    run(async () => {
+      const { refreshMessage } = await api.completeTask(task.taskId)
+      toast.show(`"${task.title}" 완료! ${refreshMessage}`, 'refresh')
+      await loadAll()
+    })
+
+  const remove = (task: Task) =>
+    run(async () => {
+      await api.deleteTask(task.taskId)
+      await loadTasks()
+    })
+
+  const rename = (task: Task, title: string, estimatedMinutes: number | null) =>
+    run(async () => {
+      await api.updateTask(task.taskId, { title, ...(estimatedMinutes ? { estimatedMinutes } : {}) })
+      await loadTasks()
+    })
+
+  const add = async (title: string, estimatedMinutes: number | null) => {
+    try {
+      await api.addTask({ title, estimatedMinutes })
+      await loadTasks()
+      return true
+    } catch (e) {
+      toast.show((e as Error).message, 'error')
+      return false
+    }
+  }
+
+  const finishToday = () =>
+    run(async () => {
+      if (myStatus?.state === 'FOCUS') applyStatus(await api.stopFocus('STOPPED'))
+      navigate('/review')
+    })
+
+  const state = myStatus?.state ?? 'IDLE'
+  const focusingTask = useMemo(
+    () => tasks.find((t) => t.taskId === myStatus?.session?.taskId) ?? null,
+    [tasks, myStatus],
+  )
+  const myElapsed = state === 'IDLE' ? 0 : elapsedSeconds(myStatus?.since, now, statusOffset)
+
+  const occupied = SEAT_NUMBERS.filter((n) => room.seats[n]).length
+  const focusing = SEAT_NUMBERS.filter((n) => room.seats[n]?.state === 'FOCUS').length
+  const hasSeats = occupied > 0
+
+  return (
+    <div className={`room-page ${compact ? 'is-compact' : ''}`}>
+      <header className="room-topbar">
+        <div className="topbar-left">
+          <span className="logo">모여봄</span>
+          {hasSeats && (
+            <span className="focus-count">
+              {occupied}명 중 <strong>{focusing}명</strong> 집중 중
+            </span>
+          )}
+        </div>
+        <div className={`topbar-timer timer-${state.toLowerCase()}`} aria-live="off">
+          <div className="timer-value">{formatClock(myElapsed)}</div>
+          <div className="timer-caption">
+            {state === 'FOCUS' && (focusingTask ? focusingTask.title : '집중 중')}
+            {state === 'BREAK' && '휴식 중 · 할 일을 골라 다시 시작해요'}
+            {state === 'IDLE' && '할 일을 골라 시작해요'}
+          </div>
+        </div>
+        <div className="topbar-right">
+          <span className={`my-state chip-${state.toLowerCase()}`}>
+            <span className="dot" aria-hidden="true" />
+            {STATE_LABEL[state]}
+          </span>
+        </div>
+      </header>
+
+      {room.connection === 'reconnecting' && (
+        <div className="banner" role="status">
+          다시 연결하는 중이에요…
+        </div>
+      )}
+
+      <div className="room-body">
+        <main className="seat-grid" aria-label="열람실 자리">
+          {hasSeats
+            ? SEAT_NUMBERS.map((n) => (
+                <SeatTile
+                  key={n}
+                  seatNo={n}
+                  occupant={room.seats[n] ?? null}
+                  isMe={n === room.mySeatNo}
+                  now={now}
+                  offsetMs={room.offsetMs}
+                  compact={compact}
+                />
+              ))
+            : SEAT_NUMBERS.map((n) => (
+                <div key={n} className="seat seat-empty seat-loading">
+                  {n === 5 && <span>자리 찾는 중…</span>}
+                </div>
+              ))}
+        </main>
+        {panelOpen && (
+          <TaskPanel
+            tasks={tasks}
+            myStatus={myStatus}
+            liveSeconds={state === 'FOCUS' ? myElapsed : 0}
+            busy={busy}
+            onFocus={focus}
+            onComplete={complete}
+            onDelete={remove}
+            onRename={rename}
+            onAdd={add}
+            onClose={compact ? () => setPanelOpen(false) : undefined}
+          />
+        )}
+      </div>
+
+      <footer className="room-toolbar">
+        <div className="toolbar-group">
+          <ToolButton icon="☰" label="할 일" active={panelOpen} onClick={() => setPanelOpen((v) => !v)} />
+          <ToolButton icon="?" label="안내" onClick={() => setModal('guide')} />
+          <ToolButton icon="⚙" label="설정" onClick={() => setModal('settings')} />
+        </div>
+        <div className="toolbar-group">
+          <ToolButton icon="☕" label="휴식" disabled={state !== 'FOCUS' || busy} onClick={() => stop('BREAK')} />
+          <ToolButton icon="■" label="중단" disabled={state !== 'FOCUS' || busy} onClick={() => stop('STOPPED')} />
+          <ToolButton
+            icon="✓"
+            label="완료"
+            disabled={!focusingTask || busy}
+            onClick={() => focusingTask && complete(focusingTask)}
+          />
+        </div>
+        <div className="toolbar-group">
+          <button className="end-button" onClick={finishToday} disabled={busy} aria-label="오늘 마무리">
+            {compact ? '마무리' : '오늘 마무리'}
+          </button>
+        </div>
+      </footer>
+
+      {modal === 'guide' && <GuideModal onClose={() => setModal(null)} />}
+      {modal === 'settings' && <SettingsModal onClose={() => setModal(null)} />}
+    </div>
+  )
+}
+
+function ToolButton({
+  icon,
+  label,
+  onClick,
+  disabled,
+  active,
+}: {
+  icon: string
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  active?: boolean
+}) {
+  return (
+    <button
+      className={`tool-button ${active ? 'is-active' : ''}`}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      aria-pressed={active}
+    >
+      <span className="tool-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="tool-label">{label}</span>
+    </button>
+  )
+}

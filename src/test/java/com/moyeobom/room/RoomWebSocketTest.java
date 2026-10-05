@@ -13,6 +13,7 @@ import java.lang.reflect.Type;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -83,7 +84,9 @@ class RoomWebSocketTest extends IntegrationTestSupport {
         assertThat(snapshot.get("type")).isEqualTo("ROOM_SNAPSHOT");
         assertThat((Integer) JsonPath.read(snapshot, "$.payload.mySeatNo")).isEqualTo(mySeat);
         List<Object> occupants = JsonPath.read(snapshot, "$.payload.seats[*].occupant");
-        assertThat(occupants).hasSize(9).doesNotContainNull();
+        assertThat(occupants).hasSize(9);
+        // 나 포함 5~9명이 앉아 있고, 나머지는 빈자리(null)다
+        assertThat(occupants.stream().filter(Objects::nonNull).count()).isBetween(5L, 9L);
         assertThat((String) JsonPath.read(snapshot, "$.payload.seats[" + (mySeat - 1) + "].occupant.nickname"))
                 .isEqualTo(entered.get("nickname"));
         assertThat((String) JsonPath.read(snapshot, "$.payload.seats[" + (mySeat - 1) + "].occupant.state"))

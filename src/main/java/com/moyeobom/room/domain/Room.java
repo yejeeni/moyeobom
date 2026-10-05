@@ -71,6 +71,11 @@ public class Room {
         return seats.stream().filter(seat -> seat.getSeatNo() != mySeatNo).toList();
     }
 
+    /** 자리에 앉은 사람 수(나 포함) */
+    public long occupiedCount() {
+        return seats.stream().filter(seat -> !seat.isEmpty()).count();
+    }
+
     public long focusingCount() {
         return seats.stream()
                 .filter(seat -> seat.occupant().map(Occupant::isFocusing).orElse(false))

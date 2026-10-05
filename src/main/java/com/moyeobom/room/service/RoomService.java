@@ -5,7 +5,6 @@ import com.moyeobom.common.exception.BusinessException;
 import com.moyeobom.common.exception.ErrorCode;
 import com.moyeobom.focus.domain.MyState;
 import com.moyeobom.focus.service.FocusService;
-import com.moyeobom.mate.service.MateFactory.PlacedMate;
 import com.moyeobom.mate.service.MateScheduler;
 import com.moyeobom.room.config.RoomProperties;
 import com.moyeobom.room.domain.CharacterParts;
@@ -14,7 +13,6 @@ import com.moyeobom.room.domain.Occupant;
 import com.moyeobom.room.domain.OccupantKind;
 import com.moyeobom.room.domain.Room;
 import com.moyeobom.room.domain.RoomStatus;
-import com.moyeobom.room.domain.Seat;
 import com.moyeobom.room.dto.RoomDtos.CountsPayload;
 import com.moyeobom.room.dto.RoomDtos.NoticePayload;
 import com.moyeobom.room.dto.RoomDtos.OccupantView;
@@ -153,11 +151,7 @@ public class RoomService {
             room.mySeat().sit(new Occupant(Nicknames.random(random), CharacterParts.random(random),
                     OccupantKind.REAL, myState.state(), myState.since(), counts.completedCount(),
                     counts.remainingCount()));
-            List<Seat> mateSeats = room.mateSeats();
-            List<PlacedMate> mates = mateScheduler.createInitialMates(mateSeats.size(), now);
-            for (int i = 0; i < mateSeats.size(); i++) {
-                mateScheduler.seat(room, mateSeats.get(i), mates.get(i));
-            }
+            mateScheduler.populate(room, now);
             // 입장 직후 WebSocket이 연결되지 않으면 유예 시간 뒤에 정리한다
             room.startGrace(scheduleExpiry(room));
         });

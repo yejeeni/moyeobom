@@ -28,11 +28,18 @@ public class MateFactory {
     private final MateProperties properties;
     private final RandomGenerator random;
 
+    /** 방을 처음 만들 때 앉아 있을 메이트 수. 빈 자리보다 많을 수 없다. */
+    public int initialMateCount(int seatCount) {
+        MateProperties.Initial initial = properties.initial();
+        return Math.min(seatCount, between(initial.mateCountMin(), initial.mateCountMax()));
+    }
+
     /**
      * 방을 처음 만들 때 "이미 공부하던 중"인 메이트들. 경과 시간이 제각각 보이도록 since를 앞당긴다.
+     * 아직 집중을 시작하지 않은 나까지 포함해 앉은 사람의 과반이 집중 중이도록 한다.
      */
     public List<PlacedMate> createInitial(int count, Instant now) {
-        int focusCount = Math.min(count, Math.max(properties.majorityFocusCount(),
+        int focusCount = Math.min(count, Math.max(majorityOf(count + 1),
                 (int) Math.round(count * properties.initial().focusRatio())));
         List<SeatState> states = new ArrayList<>();
         for (int i = 0; i < count; i++) {
@@ -67,6 +74,15 @@ public class MateFactory {
         return pick(properties.refillDelay());
     }
 
+    /** 처음에 빈 자리에 새 메이트가 들어오기까지 걸리는 시간 */
+    public Duration arrivalDelay() {
+        return pick(properties.initial().arrivalDelay());
+    }
+
+    public <T> void shuffle(List<T> list) {
+        Collections.shuffle(list, random);
+    }
+
     public boolean rollComplete() {
         return random.nextDouble() < properties.completeProbability();
     }
@@ -81,8 +97,9 @@ public class MateFactory {
         return between(initial.remainingCountMin(), initial.remainingCountMax());
     }
 
-    public int majorityFocusCount() {
-        return properties.majorityFocusCount();
+    /** n명 중 과반 */
+    public static int majorityOf(long occupied) {
+        return (int) (occupied / 2 + 1);
     }
 
     private PlacedMate placeAlreadyStudying(SeatState state, Instant now) {

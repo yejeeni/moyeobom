@@ -40,7 +40,7 @@ export function Room() {
   const loadTasks = useCallback(async () => {
     const { sprint } = await api.currentSprint()
     if (!sprint) {
-      navigate('/plan', { replace: true })
+      navigate('/', { replace: true })
       return
     }
     setTasks(sprint.tasks)
@@ -60,7 +60,7 @@ export function Room() {
     loadAll().catch((e) => toast.show((e as Error).message, 'error'))
     if (!room.roomId) {
       room.enter().catch((e) => {
-        if (isApiError(e, 'NO_TASK_FOR_ROOM')) navigate('/plan', { replace: true })
+        if (isApiError(e, 'NO_TASK_FOR_ROOM')) navigate('/', { replace: true })
         else toast.show((e as Error).message, 'error')
       })
     }

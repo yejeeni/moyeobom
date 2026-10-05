@@ -30,7 +30,7 @@ export function Review() {
         setActions(initial)
       })
       .catch((e) => {
-        if (isApiError(e, 'SPRINT_NOT_FOUND')) navigate('/plan', { replace: true })
+        if (isApiError(e, 'SPRINT_NOT_FOUND')) navigate('/', { replace: true })
         else toast.show((e as Error).message, 'error')
       })
   }, [navigate, toast])
@@ -58,7 +58,7 @@ export function Review() {
         <p className="muted">
           {result.carriedCount > 0 ? `${result.carriedCount}개는 다음 계획에 미리 채워 둘게요.` : '남은 일 없이 깔끔하게 마쳤어요.'}
         </p>
-        <button className="button primary large" onClick={() => navigate('/plan')}>
+        <button className="button primary large" onClick={() => navigate('/')}>
           새 스프린트 시작
         </button>
       </main>

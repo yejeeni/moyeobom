@@ -1,10 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { api } from '../api'
-import { isApiError } from '../api/client'
-import type { CarryoverTask, NewTask } from '../api/types'
-import { useToast } from '../components/Toasts'
-import { getGuestId } from '../lib/guest'
+import { useState, type FormEvent } from 'react'
+import type { CarriedTask, CarryoverTask, NewTask } from '../api/types'
 import { formatDuration } from '../lib/time'
 
 interface CarryDraft extends CarryoverTask {
@@ -12,37 +7,23 @@ interface CarryDraft extends CarryoverTask {
   minutes: string
 }
 
-export function Plan() {
-  const navigate = useNavigate()
-  const toast = useToast()
-  const [loading, setLoading] = useState(true)
-  const [carry, setCarry] = useState<CarryDraft[]>([])
+interface Props {
+  carryover: CarryoverTask[]
+  entering: boolean
+  onEnter: (tasks: NewTask[], carriedTasks: CarriedTask[]) => void
+}
+
+/**
+ * 스프린트 계획 입력. 첫 화면 오른쪽에 놓인다.
+ * 나중에 회원 기능이 생기면 같은 자리에서 로그인 패널과 바꿔 끼운다.
+ */
+export function PlanPanel({ carryover, entering, onEnter }: Props) {
+  const [carry, setCarry] = useState<CarryDraft[]>(() =>
+    carryover.map((t) => ({ ...t, included: true, minutes: '' })),
+  )
   const [tasks, setTasks] = useState<NewTask[]>([])
   const [title, setTitle] = useState('')
   const [minutes, setMinutes] = useState('')
-  const [entering, setEntering] = useState(false)
-
-  useEffect(() => {
-    if (!getGuestId()) {
-      navigate('/', { replace: true })
-      return
-    }
-    ;(async () => {
-      try {
-        const { sprint } = await api.currentSprint()
-        if (sprint) {
-          navigate('/room', { replace: true })
-          return
-        }
-        const { tasks: carried } = await api.carryover()
-        setCarry(carried.map((t) => ({ ...t, included: true, minutes: '' })))
-        setLoading(false)
-      } catch (e) {
-        if (isApiError(e, 'GUEST_NOT_FOUND')) navigate('/', { replace: true })
-        else toast.show((e as Error).message, 'error')
-      }
-    })()
-  }, [navigate, toast])
 
   const addTask = (e: FormEvent) => {
     e.preventDefault()
@@ -53,43 +34,29 @@ export function Plan() {
     setMinutes('')
   }
 
-  const included = carry.filter((t) => t.included)
-  const total = tasks.length + included.length
-
-  const enter = async () => {
-    setEntering(true)
-    try {
-      await api.startSprint(
-        tasks,
-        included.map((t) => ({ fromTaskId: t.taskId, estimatedMinutes: t.minutes ? Number(t.minutes) : null })),
-      )
-      navigate('/room')
-    } catch (e) {
-      if (isApiError(e, 'SPRINT_ALREADY_OPEN')) {
-        navigate('/room')
-        return
-      }
-      toast.show((e as Error).message, 'error')
-      setEntering(false)
-    }
-  }
-
   const updateCarry = (taskId: number, change: Partial<CarryDraft>) =>
     setCarry((list) => list.map((t) => (t.taskId === taskId ? { ...t, ...change } : t)))
 
-  if (loading) return <div className="page-loading">오늘 계획을 불러오는 중…</div>
+  const included = carry.filter((t) => t.included)
+  const total = tasks.length + included.length
+
+  const enter = () =>
+    onEnter(
+      tasks,
+      included.map((t) => ({ fromTaskId: t.taskId, estimatedMinutes: t.minutes ? Number(t.minutes) : null })),
+    )
 
   return (
-    <main className="plan">
+    <section className="plan-panel" aria-label="스프린트 계획">
       <header className="plan-header">
         <p className="eyebrow">스프린트 계획</p>
-        <h1>오늘은 무엇을 해볼까요?</h1>
+        <h2>오늘은 무엇을 해볼까요?</h2>
         <p className="muted">할 일을 하나 이상 적으면 열람실에 들어갈 수 있어요. 예상 시간은 적지 않아도 괜찮아요.</p>
       </header>
 
       {carry.length > 0 && (
-        <section className="card">
-          <h2>지난번에 넘겨 둔 일</h2>
+        <div className="card">
+          <h3>지난번에 넘겨 둔 일</h3>
           <p className="muted small">남은 작업을 기준으로 예상 시간을 다시 적어 주세요. 실제 시간은 새로 재요.</p>
           <ul className="plan-list">
             {carry.map((t) => (
@@ -104,7 +71,7 @@ export function Plan() {
                       type="number"
                       min={1}
                       value={t.minutes}
-                      placeholder={t.previousEstimatedMinutes ? String(t.previousEstimatedMinutes) : '분'}
+                      placeholder={t.previousEstimatedMinutes ? String(t.previousEstimatedMinutes) : '예상'}
                       onChange={(e) => updateCarry(t.taskId, { minutes: e.target.value })}
                       aria-label={`${t.title} 남은 예상 시간(분)`}
                     />
@@ -117,11 +84,11 @@ export function Plan() {
               </li>
             ))}
           </ul>
-        </section>
+        </div>
       )}
 
-      <section className="card">
-        <h2>새로운 할 일</h2>
+      <div className="card">
+        <h3>새로운 할 일</h3>
         <form className="plan-add" onSubmit={addTask}>
           <input
             value={title}
@@ -129,7 +96,6 @@ export function Plan() {
             placeholder="예: 알고리즘 3문제 풀기"
             maxLength={100}
             aria-label="할 일 제목"
-            autoFocus
           />
           <label className="inline">
             <input
@@ -163,13 +129,13 @@ export function Plan() {
         ) : (
           total === 0 && <p className="empty">오늘 할 일 하나만 적어볼까요?</p>
         )}
-      </section>
+      </div>
 
       <div className="plan-footer">
         <button className="button primary large" onClick={enter} disabled={total === 0 || entering}>
           {entering ? '자리 찾는 중…' : `열람실 입장 (${total})`}
         </button>
       </div>
-    </main>
+    </section>
   )
 }

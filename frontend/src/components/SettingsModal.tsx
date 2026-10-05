@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { isAlertSoundOn, playChime, setAlertSound } from '../lib/preferences'
+import { Icon } from './Icon'
 import { Modal } from './Modal'
 import { useToast } from './Toasts'
 
@@ -24,6 +25,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
   const minutesValue = Number(minutes)
   const valid = Number.isInteger(minutesValue) && minutesValue > 0
+  // −/+ 버튼은 5분 단위로 움직인다
+  const stepMinutes = (delta: number) => setMinutes(String(Math.max(5, (valid ? minutesValue : 50) + delta)))
 
   const save = async () => {
     if (!valid) return
@@ -42,17 +45,30 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title="설정" onClose={onClose}>
-      <div className="settings">
-        <label className="switch-row">
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} disabled={!loaded} />
-          <span>
-            휴식 알림
+      <div className="setting-group">
+        <label className="setting-row">
+          <span className="setting-icon">
+            <Icon name="bell" size={18} />
+          </span>
+          <span className="setting-text">
+            <strong>휴식 알림</strong>
             <small>한 번에 오래 집중하면 쉬어 가라고 알려 드려요</small>
           </span>
+          <input
+            type="checkbox"
+            role="switch"
+            className="switch"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+            disabled={!loaded}
+          />
         </label>
-        <label className={`field-row ${enabled ? '' : 'disabled'}`}>
-          <span>알림까지 집중 시간</span>
-          <span className="inline">
+        <div className={`setting-sub ${enabled ? '' : 'disabled'}`}>
+          <span id="alert-minutes-label">알림까지 집중 시간</span>
+          <div className="stepper">
+            <button type="button" onClick={() => stepMinutes(-5)} disabled={!enabled} aria-label="5분 줄이기">
+              <Icon name="minus" size={16} />
+            </button>
             <input
               type="number"
               min={1}
@@ -60,27 +76,42 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setMinutes(e.target.value)}
               disabled={!enabled}
               aria-invalid={!valid}
+              aria-labelledby="alert-minutes-label"
             />
-            분
+            <span className="stepper-unit">분</span>
+            <button type="button" onClick={() => stepMinutes(5)} disabled={!enabled} aria-label="5분 늘리기">
+              <Icon name="plus" size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="setting-group">
+        <label className="setting-row">
+          <span className="setting-icon">
+            <Icon name="volume" size={18} />
           </span>
-        </label>
-        <label className="switch-row">
-          <input type="checkbox" checked={sound} onChange={(e) => setSound(e.target.checked)} />
-          <span>
-            알림 소리
+          <span className="setting-text">
+            <strong>알림 소리</strong>
             <small>이 브라우저에만 저장돼요</small>
           </span>
+          <input type="checkbox" role="switch" className="switch" checked={sound} onChange={(e) => setSound(e.target.checked)} />
         </label>
-        <button className="link-button" type="button" onClick={playChime}>
-          소리 미리 듣기
-        </button>
+        <div className="setting-sub">
+          <span>어떤 소리인지 들어 보기</span>
+          <button className="preview-button" type="button" onClick={playChime}>
+            <Icon name="play" size={14} />
+            미리 듣기
+          </button>
+        </div>
       </div>
+
       <div className="modal-actions">
         <button className="button" onClick={onClose}>
           취소
         </button>
         <button className="button primary" onClick={save} disabled={!loaded || !valid || saving}>
-          저장
+          {saving ? '저장 중…' : '저장'}
         </button>
       </div>
     </Modal>

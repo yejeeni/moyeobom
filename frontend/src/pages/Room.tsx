@@ -4,6 +4,7 @@ import { api } from '../api'
 import { isApiError } from '../api/client'
 import type { MyStatus, Task } from '../api/types'
 import { GuideModal } from '../components/GuideModal'
+import { Icon, type IconName } from '../components/Icon'
 import { SeatTile } from '../components/SeatTile'
 import { SettingsModal } from '../components/SettingsModal'
 import { TaskPanel } from '../components/TaskPanel'
@@ -125,6 +126,17 @@ export function Room() {
     }
   }
 
+  // 대기·휴식 중에는 아래 툴바 가운데 버튼으로 다음 할 일을 바로 시작한다
+  const nextTask = tasks.find((t) => t.status === 'TODO') ?? null
+  const startNext = () => {
+    if (nextTask) {
+      focus(nextTask)
+      return
+    }
+    setPanelOpen(true)
+    toast.show('먼저 오늘 할 일을 추가해 주세요')
+  }
+
   const finishToday = () =>
     run(async () => {
       if (myStatus?.state === 'FOCUS') applyStatus(await api.stopFocus('STOPPED'))
@@ -143,30 +155,36 @@ export function Room() {
   const hasSeats = occupied > 0
 
   return (
-    <div className={`room-page ${compact ? 'is-compact' : ''}`}>
+    <div className={`room-page ${compact ? 'is-compact' : ''} ${panelOpen ? 'panel-open' : ''}`}>
       <header className="room-topbar">
         <div className="topbar-left">
-          <span className="logo">모여봄</span>
+          <span className="logo">
+            <span className="logo-mark" aria-hidden="true" />
+            모여봄
+          </span>
           {hasSeats && (
             <span className="focus-count">
+              <span className="live-dot" aria-hidden="true" />
               {occupied}명 중 <strong>{focusing}명</strong> 집중 중
             </span>
           )}
         </div>
         <div className={`topbar-timer timer-${state.toLowerCase()}`} aria-live="off">
-          <div className="timer-value">{formatClock(myElapsed)}</div>
+          {state === 'IDLE' ? (
+            <div className="timer-prompt">할 일을 골라 집중을 시작해요</div>
+          ) : (
+            <div className="timer-value">{formatClock(myElapsed)}</div>
+          )}
           <div className="timer-caption">
-            {state === 'FOCUS' && (focusingTask ? focusingTask.title : '집중 중')}
-            {state === 'BREAK' && '휴식 중 · 할 일을 골라 다시 시작해요'}
-            {state === 'IDLE' && '할 일을 골라 시작해요'}
+            <span className={`my-state chip-${state.toLowerCase()}`}>
+              <span className="dot" aria-hidden="true" />
+              {STATE_LABEL[state]}
+            </span>
+            {state === 'FOCUS' && <span className="caption-text">{focusingTask ? focusingTask.title : '집중 중'}</span>}
+            {state === 'BREAK' && <span className="caption-text">잠깐 쉬는 중이에요</span>}
           </div>
         </div>
-        <div className="topbar-right">
-          <span className={`my-state chip-${state.toLowerCase()}`}>
-            <span className="dot" aria-hidden="true" />
-            {STATE_LABEL[state]}
-          </span>
-        </div>
+        <div className="topbar-right">{room.nickname && <span className="me-chip">나 · {room.nickname}</span>}</div>
       </header>
 
       {room.connection === 'reconnecting' && (
@@ -195,7 +213,8 @@ export function Room() {
                 </div>
               ))}
         </main>
-        {panelOpen && (
+        {/* 넓은 화면에서는 늘 그려 두고 CSS로 밀어 넣고 뺀다 */}
+        {(panelOpen || !compact) && (
           <TaskPanel
             tasks={tasks}
             myStatus={myStatus}
@@ -213,22 +232,35 @@ export function Room() {
 
       <footer className="room-toolbar">
         <div className="toolbar-group">
-          <ToolButton icon="☰" label="할 일" active={panelOpen} onClick={() => setPanelOpen((v) => !v)} />
-          <ToolButton icon="?" label="안내" onClick={() => setModal('guide')} />
-          <ToolButton icon="⚙" label="설정" onClick={() => setModal('settings')} />
+          <ToolButton icon="list" label="할 일" active={panelOpen} onClick={() => setPanelOpen((v) => !v)} />
+          <ToolButton icon="help" label="안내" onClick={() => setModal('guide')} />
+          <ToolButton icon="settings" label="설정" onClick={() => setModal('settings')} />
         </div>
-        <div className="toolbar-group">
-          <ToolButton icon="☕" label="휴식" disabled={state !== 'FOCUS' || busy} onClick={() => stop('BREAK')} />
-          <ToolButton icon="■" label="중단" disabled={state !== 'FOCUS' || busy} onClick={() => stop('STOPPED')} />
-          <ToolButton
-            icon="✓"
-            label="완료"
-            disabled={!focusingTask || busy}
-            onClick={() => focusingTask && complete(focusingTask)}
-          />
+        <div className="toolbar-group toolbar-center">
+          {state === 'FOCUS' ? (
+            <>
+              <ToolButton icon="coffee" label="휴식" disabled={busy} onClick={() => stop('BREAK')} />
+              <ToolButton icon="stop" label="중단" disabled={busy} onClick={() => stop('STOPPED')} />
+              <ToolButton
+                icon="check"
+                label="완료"
+                disabled={!focusingTask || busy}
+                onClick={() => focusingTask && complete(focusingTask)}
+              />
+            </>
+          ) : (
+            <button className="start-button" onClick={startNext} disabled={busy}>
+              <Icon name="play" size={18} />
+              <span className="start-text">
+                <strong>{state === 'BREAK' ? '다시 집중' : '집중 시작'}</strong>
+                {nextTask && <small>{nextTask.title}</small>}
+              </span>
+            </button>
+          )}
         </div>
         <div className="toolbar-group">
           <button className="end-button" onClick={finishToday} disabled={busy} aria-label="오늘 마무리">
+            <Icon name="moon" size={16} />
             {compact ? '마무리' : '오늘 마무리'}
           </button>
         </div>
@@ -247,7 +279,7 @@ function ToolButton({
   disabled,
   active,
 }: {
-  icon: string
+  icon: IconName
   label: string
   onClick: () => void
   disabled?: boolean
@@ -261,8 +293,8 @@ function ToolButton({
       aria-label={label}
       aria-pressed={active}
     >
-      <span className="tool-icon" aria-hidden="true">
-        {icon}
+      <span className="tool-icon">
+        <Icon name={icon} size={22} />
       </span>
       <span className="tool-label">{label}</span>
     </button>

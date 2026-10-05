@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import type { MyStatus, Task } from '../api/types'
 import { formatDuration } from '../lib/time'
+import { Icon } from './Icon'
 
 interface Props {
   tasks: Task[]
@@ -23,6 +24,9 @@ export function TaskPanel({ tasks, myStatus, liveSeconds, busy, onFocus, onCompl
   const todo = tasks.filter((t) => t.status === 'TODO')
   const done = tasks.filter((t) => t.status === 'DONE')
   const focusingTaskId = myStatus?.session?.taskId ?? null
+  const focusingTask = tasks.find((t) => t.taskId === focusingTaskId) ?? null
+  const todaySeconds = tasks.reduce((sum, t) => sum + t.actualSeconds, 0) + liveSeconds
+  const progress = tasks.length > 0 ? done.length / tasks.length : 0
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -70,15 +74,39 @@ export function TaskPanel({ tasks, myStatus, liveSeconds, busy, onFocus, onCompl
   return (
     <aside className="task-panel" aria-label="오늘 할 일">
       <div className="panel-header">
-        <h2>
-          오늘 할 일 <span className="muted">완료 {done.length} / {tasks.length}</span>
-        </h2>
+        <h2>오늘 할 일</h2>
         {onClose && (
           <button className="icon-button" onClick={onClose} aria-label="할 일 패널 닫기">
-            ✕
+            <Icon name="close" size={18} />
           </button>
         )}
       </div>
+      <section className="today-summary" aria-label="오늘 요약">
+        <div className="summary-row">
+          <span>
+            완료 <strong>{done.length}</strong> / {tasks.length}
+          </span>
+          <span>
+            오늘 집중 <strong>{formatDuration(todaySeconds)}</strong>
+          </span>
+        </div>
+        <div className="progress" role="progressbar" aria-valuenow={done.length} aria-valuemin={0} aria-valuemax={tasks.length}>
+          <span style={{ width: `${progress * 100}%` }} />
+        </div>
+        {focusingTask && (
+          <div className="now-focusing">
+            <span className="now-label">
+              <span className="live-dot" aria-hidden="true" />
+              지금 집중 중
+            </span>
+            <strong>{focusingTask.title}</strong>
+            <span className="task-meta">
+              {formatDuration(focusingTask.actualSeconds + liveSeconds)}
+              {focusingTask.estimatedMinutes ? ` / 예상 ${focusingTask.estimatedMinutes}분` : ''}
+            </span>
+          </div>
+        )}
+      </section>
       <ul className="task-list">
         {todo.map(row)}
         {done.length > 0 && <li className="list-divider">완료한 일</li>}
@@ -86,16 +114,19 @@ export function TaskPanel({ tasks, myStatus, liveSeconds, busy, onFocus, onCompl
       </ul>
       <form className="task-add" onSubmit={submit}>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="할 일 추가" maxLength={100} aria-label="새 할 일 제목" />
-        <input
-          value={minutes}
-          onChange={(e) => setMinutes(e.target.value)}
-          type="number"
-          min={1}
-          placeholder="분"
-          aria-label="예상 시간(분, 선택)"
-        />
-        <button className="button small" type="submit" disabled={!title.trim() || busy}>
-          추가
+        <label className="task-add-minutes">
+          <input
+            value={minutes}
+            onChange={(e) => setMinutes(e.target.value)}
+            type="number"
+            min={1}
+            placeholder="예상"
+            aria-label="예상 시간(분, 선택)"
+          />
+          분
+        </label>
+        <button className="add-button" type="submit" disabled={!title.trim() || busy} aria-label="할 일 추가">
+          <Icon name="plus" size={18} />
         </button>
       </form>
     </aside>

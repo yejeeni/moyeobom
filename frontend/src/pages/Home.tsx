@@ -4,6 +4,7 @@ import { api } from '../api'
 import { isApiError } from '../api/client'
 import type { CarriedTask, CarryoverTask, NewTask } from '../api/types'
 import { DemoRoom } from '../components/DemoRoom'
+import { CharacterModal } from '../components/CharacterModal'
 import { GuideModal } from '../components/GuideModal'
 import { HowItWorks } from '../components/HowItWorks'
 import { IntroPanel } from '../components/IntroPanel'
@@ -21,6 +22,7 @@ export function Home() {
   const [carryover, setCarryover] = useState<CarryoverTask[] | null>(() => (getGuestId() ? null : []))
   const [entering, setEntering] = useState(false)
   const [guideOpen, setGuideOpen] = useState(false)
+  const [charactersOpen, setCharactersOpen] = useState(false)
 
   useEffect(() => {
     if (!getGuestId()) return
@@ -77,9 +79,14 @@ export function Home() {
             <span className="brand-mark" aria-hidden="true" />
             모여봄
           </span>
-          <button className="nav-link" onClick={() => setGuideOpen(true)}>
-            열람실 안내
-          </button>
+          <div className="nav-links">
+            <button className="nav-link" onClick={() => setCharactersOpen(true)}>
+              내 캐릭터
+            </button>
+            <button className="nav-link" onClick={() => setGuideOpen(true)}>
+              열람실 안내
+            </button>
+          </div>
         </div>
       </header>
 
@@ -105,6 +112,7 @@ export function Home() {
 
       <footer className="home-footer">© 모여봄 · 혼자 공부해도, 함께 있는 것처럼</footer>
       {guideOpen && <GuideModal onClose={() => setGuideOpen(false)} />}
+      {charactersOpen && <CharacterModal onClose={() => setCharactersOpen(false)} />}
     </div>
   )
 }

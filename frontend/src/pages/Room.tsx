@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { isApiError } from '../api/client'
 import type { MyStatus, Task } from '../api/types'
+import { useSeatCharacters } from '../character/assignment'
+import { CharacterModal } from '../components/CharacterModal'
 import { GuideModal } from '../components/GuideModal'
 import { Icon, type IconName } from '../components/Icon'
 import { SeatTile } from '../components/SeatTile'
@@ -31,7 +33,7 @@ export function Room() {
   const [panelCompact, setPanelCompact] = useState(false)
   const panelOpen = compact ? panelCompact : panelWide
   const setPanelOpen = compact ? setPanelCompact : setPanelWide
-  const [modal, setModal] = useState<'guide' | 'settings' | null>(null)
+  const [modal, setModal] = useState<'guide' | 'settings' | 'characters' | null>(null)
 
   const applyStatus = useCallback((status: MyStatus) => {
     setStatusOffset(Date.parse(status.serverTime) - Date.now())
@@ -150,6 +152,7 @@ export function Room() {
   )
   const myElapsed = state === 'IDLE' ? 0 : elapsedSeconds(myStatus?.since, now, statusOffset)
 
+  const seatCharacters = useSeatCharacters(room.roomId, room.seats, room.mySeatNo)
   const occupied = SEAT_NUMBERS.filter((n) => room.seats[n]).length
   const focusing = SEAT_NUMBERS.filter((n) => room.seats[n]?.state === 'FOCUS').length
   const hasSeats = occupied > 0
@@ -205,6 +208,7 @@ export function Room() {
                   now={now}
                   offsetMs={room.offsetMs}
                   compact={compact}
+                  character={seatCharacters[n]}
                 />
               ))
             : SEAT_NUMBERS.map((n) => (
@@ -234,6 +238,8 @@ export function Room() {
         <div className="toolbar-group">
           <ToolButton icon="list" label="할 일" active={panelOpen} onClick={() => setPanelOpen((v) => !v)} />
           <ToolButton icon="help" label="안내" onClick={() => setModal('guide')} />
+          {/* 좁은 창에서는 자리가 모자라 설정 안에서 연다 */}
+          {!compact && <ToolButton icon="image" label="캐릭터" onClick={() => setModal('characters')} />}
           <ToolButton icon="settings" label="설정" onClick={() => setModal('settings')} />
         </div>
         <div className="toolbar-group toolbar-center">
@@ -267,7 +273,10 @@ export function Room() {
       </footer>
 
       {modal === 'guide' && <GuideModal onClose={() => setModal(null)} />}
-      {modal === 'settings' && <SettingsModal onClose={() => setModal(null)} />}
+      {modal === 'settings' && (
+        <SettingsModal onClose={() => setModal(null)} onOpenCharacters={() => setModal('characters')} />
+      )}
+      {modal === 'characters' && <CharacterModal onClose={() => setModal(null)} />}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Occupant } from '../api/types'
 import { backgroundFor } from '../character/backgrounds'
+import { phaseOf, pickBuiltin, type CharacterAsset } from '../character/characters'
 import { STATE_LABEL, elapsedSeconds, formatShort } from '../lib/time'
 import { Character } from './Character'
 
@@ -16,6 +17,8 @@ interface Props {
   now: number
   offsetMs: number
   compact: boolean
+  /** 이 자리에 배정된 캐릭터. 없으면 기본 캐릭터 */
+  character?: CharacterAsset
 }
 
 interface SeatEvent {
@@ -54,7 +57,7 @@ function useSeatEvent(occupant: Occupant | null, isMe: boolean): SeatEvent | nul
   return event
 }
 
-export function SeatTile({ seatNo, occupant, isMe, now, offsetMs, compact }: Props) {
+export function SeatTile({ seatNo, occupant, isMe, now, offsetMs, compact, character }: Props) {
   const event = useSeatEvent(occupant, isMe)
 
   if (!occupant) {
@@ -71,7 +74,11 @@ export function SeatTile({ seatNo, occupant, isMe, now, offsetMs, compact }: Pro
   const name = isMe ? `나 · ${occupant.nickname}` : occupant.nickname
   const tone = ROOM_TONES[(seatNo * 5) % ROOM_TONES.length]
   const flipped = FLIPPED_SEATS.has(seatNo)
-  const background = backgroundFor(seatNo)
+  const asset = character ?? pickBuiltin(occupant.character)
+  const phase = phaseOf(occupant.character)
+  // 캐릭터에 짝 배경이 있으면 배경과 캐릭터를 같은 칸 크기로 겹쳐 위치를 맞추고, 뒤집을 때도 함께 뒤집는다
+  const paired = asset.background !== null
+  const background = asset.background ?? backgroundFor(seatNo)
 
   return (
     <div
@@ -79,26 +86,35 @@ export function SeatTile({ seatNo, occupant, isMe, now, offsetMs, compact }: Pro
       aria-label={`${name}, ${stateText}, 완료 ${occupant.completedCount}개, 남은 ${occupant.remainingCount}개`}
     >
       <div className="scene" aria-hidden="true">
-        {background ? (
-          <img className="scene-image" src={background} alt="" draggable={false} />
+        {paired ? (
+          <div className={`paired-stack ${flipped ? 'is-flipped' : ''}`}>
+            <img className="scene-image" src={background!} alt="" draggable={false} />
+            <Character asset={asset} state={state} phase={phase} paired />
+          </div>
         ) : (
           <>
-            <div className="window">
-              <span className="moon" />
-              <span className="star s1" />
-              <span className="star s2" />
-              <span className="star s3" />
+            {background ? (
+              <img className="scene-image" src={background} alt="" draggable={false} />
+            ) : (
+              <>
+                <div className="window">
+                  <span className="moon" />
+                  <span className="star s1" />
+                  <span className="star s2" />
+                  <span className="star s3" />
+                </div>
+                {seatNo % 3 === 0 && <div className="shelf" />}
+                {seatNo % 3 === 1 && <div className="plant" />}
+                <div className="glow" />
+                <div className="desk" />
+                <Lamp on={state === 'FOCUS'} />
+              </>
+            )}
+            <div className="character-wrap">
+              <Character asset={asset} state={state} phase={phase} flipped={flipped} />
             </div>
-            {seatNo % 3 === 0 && <div className="shelf" />}
-            {seatNo % 3 === 1 && <div className="plant" />}
-            <div className="glow" />
-            <div className="desk" />
-            <Lamp on={state === 'FOCUS'} />
           </>
         )}
-        <div className="character-wrap">
-          <Character parts={occupant.character} state={state} flipped={flipped} />
-        </div>
       </div>
 
       <div className={`state-chip chip-${state.toLowerCase()}`}>

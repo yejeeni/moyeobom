@@ -1847,6 +1847,7 @@ input[aria-invalid='true'] {
 }
 .start-text strong {
   font-size: 0.95rem;
+  white-space: nowrap;
 }
 .start-text small {
   font-size: 0.75rem;
@@ -1935,7 +1936,12 @@ input[aria-invalid='true'] {
   font-size: 0.68rem;
 }
 .is-compact .start-button {
+  flex-shrink: 0;
+  max-width: none;
   padding: 8px 14px 8px 10px;
+}
+.is-compact .toolbar-group {
+  gap: 0;
 }
 .is-compact .start-text small {
   display: none;
@@ -2266,4 +2272,202 @@ input[aria-invalid='true'] {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ---------- 캐릭터: 배경과 짝인 캐릭터, 내 캐릭터 관리 ---------- */
+/* 짝 배경이 있으면 배경과 캐릭터를 같은 칸 크기로 겹친다(둘 다 가운데 기준으로 꽉 채움) */
+.paired-stack {
+  position: absolute;
+  inset: 0;
+}
+.paired-stack.is-flipped {
+  transform: scaleX(-1);
+}
+.character.is-paired {
+  position: absolute;
+  inset: 0;
+  aspect-ratio: auto;
+}
+.character.is-paired .frame {
+  object-fit: cover;
+}
+
+.nav-links {
+  display: flex;
+  gap: 4px;
+}
+
+.character-import {
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+.character-import p {
+  margin: 0;
+}
+.folder-spec {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #13111a;
+  border: 1px solid var(--line);
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: #d9d3e3;
+  overflow-x: auto;
+}
+.character-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.character-import-actions .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.character-import-actions .preview-button {
+  text-decoration: none;
+}
+.import-report {
+  list-style: none;
+  margin: 0;
+  padding: 10px 16px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: grid;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.import-report li::before {
+  content: '· ';
+}
+.import-report .is-problem {
+  color: #f0a3a5;
+}
+.setting-row.is-disabled {
+  cursor: default;
+}
+.character-list-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 4px;
+}
+.character-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.character-card {
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: opacity 0.2s;
+}
+.character-card.is-off {
+  opacity: 0.45;
+}
+.character-preview {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  container-type: size;
+  background: linear-gradient(180deg, #4c4361 0%, #2a2438 100%);
+}
+.character-preview .character-wrap {
+  transform: translate(-50%, 0);
+}
+.character-card-body {
+  padding: 8px 10px 10px;
+  display: grid;
+  gap: 6px;
+}
+.character-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.character-card-title strong {
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.source-badge {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+}
+.source-badge.source-mine {
+  background: rgba(255, 207, 122, 0.14);
+  color: var(--lamp);
+}
+.character-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.icon-toggle {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.icon-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+.icon-toggle.is-on {
+  background: rgba(255, 207, 122, 0.18);
+  color: var(--lamp);
+}
+.icon-toggle.is-on .icon path {
+  fill: currentColor;
+}
+.tempo-select {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #13111a;
+  color: var(--text);
+  font-size: 0.75rem;
+}
+.setting-link {
+  width: 100%;
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+.setting-link:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.setting-chevron {
+  color: var(--text-muted);
+  font-size: 1.4rem;
+  line-height: 1;
 }

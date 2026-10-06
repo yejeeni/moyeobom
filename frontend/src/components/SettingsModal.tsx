@@ -5,7 +5,13 @@ import { Icon } from './Icon'
 import { Modal } from './Modal'
 import { useToast } from './Toasts'
 
-export function SettingsModal({ onClose }: { onClose: () => void }) {
+interface Props {
+  onClose: () => void
+  /** 있으면 '내 캐릭터' 항목을 보여 준다 */
+  onOpenCharacters?: () => void
+}
+
+export function SettingsModal({ onClose, onOpenCharacters }: Props) {
   const toast = useToast()
   const [enabled, setEnabled] = useState(false)
   const [minutes, setMinutes] = useState('50')
@@ -105,6 +111,23 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
+
+      {onOpenCharacters && (
+        <div className="setting-group">
+          <button className="setting-row setting-link" type="button" onClick={onOpenCharacters}>
+            <span className="setting-icon">
+              <Icon name="image" size={18} />
+            </span>
+            <span className="setting-text">
+              <strong>내 캐릭터</strong>
+              <small>내가 그린 캐릭터로 열람실 자리를 채워요</small>
+            </span>
+            <span className="setting-chevron" aria-hidden="true">
+              ›
+            </span>
+          </button>
+        </div>
+      )}
 
       <div className="modal-actions">
         <button className="button" onClick={onClose}>

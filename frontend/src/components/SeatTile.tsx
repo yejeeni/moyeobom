@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Occupant } from '../api/types'
+import { backgroundFor } from '../character/backgrounds'
 import { STATE_LABEL, elapsedSeconds, formatShort } from '../lib/time'
 import { Character } from './Character'
 
@@ -70,6 +71,7 @@ export function SeatTile({ seatNo, occupant, isMe, now, offsetMs, compact }: Pro
   const name = isMe ? `나 · ${occupant.nickname}` : occupant.nickname
   const tone = ROOM_TONES[(seatNo * 5) % ROOM_TONES.length]
   const flipped = FLIPPED_SEATS.has(seatNo)
+  const background = backgroundFor(seatNo)
 
   return (
     <div
@@ -77,18 +79,24 @@ export function SeatTile({ seatNo, occupant, isMe, now, offsetMs, compact }: Pro
       aria-label={`${name}, ${stateText}, 완료 ${occupant.completedCount}개, 남은 ${occupant.remainingCount}개`}
     >
       <div className="scene" aria-hidden="true">
-        <div className="window">
-          <span className="moon" />
-          <span className="star s1" />
-          <span className="star s2" />
-          <span className="star s3" />
-        </div>
-        {seatNo % 3 === 0 && <div className="shelf" />}
-        {seatNo % 3 === 1 && <div className="plant" />}
-        <div className="glow" />
-        <div className="desk" />
-        <Lamp on={state === 'FOCUS'} />
-        <div className={`character-wrap ${flipped ? 'is-flipped' : ''}`}>
+        {background ? (
+          <img className="scene-image" src={background} alt="" draggable={false} />
+        ) : (
+          <>
+            <div className="window">
+              <span className="moon" />
+              <span className="star s1" />
+              <span className="star s2" />
+              <span className="star s3" />
+            </div>
+            {seatNo % 3 === 0 && <div className="shelf" />}
+            {seatNo % 3 === 1 && <div className="plant" />}
+            <div className="glow" />
+            <div className="desk" />
+            <Lamp on={state === 'FOCUS'} />
+          </>
+        )}
+        <div className="character-wrap">
           <Character parts={occupant.character} state={state} flipped={flipped} />
         </div>
       </div>

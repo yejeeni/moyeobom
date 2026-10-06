@@ -1283,73 +1283,74 @@ input[aria-invalid='true'] {
 .lamp-on {
   filter: drop-shadow(0 0 8px rgba(255, 216, 138, 0.8));
 }
-/* 캐릭터: 캔버스(4:3) 아래 끝을 책상 윗면에 맞춘다 */
+/* 배경 이미지: 칸을 꽉 채우고 가운데 기준으로 잘린다 */
+.scene-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+}
+
+/* 캐릭터: 캔버스(4:3)를 칸 높이의 86%로 줄여 아래 가운데에 둔다.
+   캔버스 아래쪽은 대부분 비어 있어 살짝 내려도(4%) 그림이 잘리지 않는다 */
 .seat {
   container-type: size;
 }
 .character-wrap {
   position: absolute;
-  left: 56%;
-  bottom: 22%;
-  width: min(84cqw, 118cqh);
-  transform: translateX(-50%);
-}
-.character-wrap.is-flipped {
-  left: 44%;
+  left: 50%;
+  bottom: 0;
+  width: min(100cqw, 86cqh * 4 / 3);
+  transform: translate(-50%, 4%);
 }
 .character {
   position: relative;
   aspect-ratio: 4 / 3;
 }
-.character-layers {
-  position: absolute;
-  inset: 0;
-}
-.character-flipped .character-layers {
+.character-flipped {
   transform: scaleX(-1);
 }
-.character .layer {
+/* 여섯 장을 겹쳐 두고 지금 상태의 A·B만 보인다. B가 보일 때는 A를 숨긴다 */
+.character .frame {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  opacity: 0;
   user-select: none;
   pointer-events: none;
 }
-.layer-head {
-  transform-origin: var(--pivot);
-  transition: transform 0.6s ease;
+.character-focus .frame-focus.frame-a,
+.character-break .frame-break.frame-a,
+.character-idle .frame-idle.frame-a {
+  opacity: 1;
 }
-.character-focus .layer-head {
-  animation: head-sway 3.2s ease-in-out var(--phase) infinite;
+/* 집중: 빠르게 바꾸고 사이사이 잠깐 멈춘다 */
+.character-focus .frame-focus.frame-a {
+  animation: focus-a 2.4s step-end var(--phase) infinite;
 }
-.character-break .layer-head {
-  transform: rotate(-14deg) translate(-1%, 5%);
+.character-focus .frame-focus.frame-b {
+  animation: focus-b 2.4s step-end var(--phase) infinite;
 }
-@keyframes head-sway {
-  0%,
-  100% {
-    transform: rotate(-2.5deg);
-  }
-  50% {
-    transform: rotate(1.5deg) translateY(0.4%);
-  }
-}
-/* 손 A·B를 번갈아 보이고, 사이사이 잠깐 멈춘다 */
-.layer-hands-b {
-  opacity: 0;
-}
-.character-focus .layer-hands-a {
-  animation: hands-a 2.4s step-end var(--phase) infinite;
-}
-.character-focus .layer-hands-b {
-  animation: hands-b 2.4s step-end var(--phase) infinite;
-}
-.tempo-writing.character-focus .layer-hands-a,
-.tempo-writing.character-focus .layer-hands-b {
+.tempo-writing.character-focus .frame-focus {
   animation-duration: 4s;
 }
-@keyframes hands-b {
+/* 휴식: 숨 쉬듯 느리게, 대기: 그 사이 빠르기로 반씩 번갈아 */
+.character-break .frame-break.frame-a,
+.character-idle .frame-idle.frame-a {
+  animation: swap-a 3.2s step-end var(--phase) infinite;
+}
+.character-break .frame-break.frame-b,
+.character-idle .frame-idle.frame-b {
+  animation: swap-b 3.2s step-end var(--phase) infinite;
+}
+.character-idle .frame-idle.frame-a,
+.character-idle .frame-idle.frame-b {
+  animation-duration: 2.2s;
+}
+@keyframes focus-b {
   0%,
   16%,
   32%,
@@ -1365,7 +1366,7 @@ input[aria-invalid='true'] {
     opacity: 0;
   }
 }
-@keyframes hands-a {
+@keyframes focus-a {
   0%,
   16%,
   32%,
@@ -1381,29 +1382,20 @@ input[aria-invalid='true'] {
     opacity: 1;
   }
 }
-.zzz {
-  position: absolute;
-  left: 78%;
-  top: 6%;
-  color: rgba(255, 255, 255, 0.8);
-  font-weight: 700;
-  font-size: max(12px, 7cqw);
-  animation: drift 3s ease-in-out infinite;
+@keyframes swap-a {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
-.character-flipped .zzz {
-  left: 16%;
-}
-@keyframes drift {
+@keyframes swap-b {
   0% {
     opacity: 0;
-    transform: translateY(6px);
   }
   50% {
     opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-8px);
   }
 }
 

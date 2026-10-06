@@ -36,7 +36,7 @@ export const api = {
   stopFocus: (reason: 'STOPPED' | 'BREAK') => request<MyStatus>('POST', '/focus/stop', { reason }),
   currentFocus: () => request<MyStatus>('GET', '/focus/current'),
 
-  enterRoom: () => request<RoomEnter>('POST', '/rooms/enter'),
+  enterRoom: (seatCount: number) => request<RoomEnter>('POST', '/rooms/enter', { seatCount }),
 
   review: () => request<Review>('GET', '/sprints/current/review'),
   closeSprint: (decisions: { taskId: number; action: CloseAction }[]) =>

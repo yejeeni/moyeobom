@@ -5,11 +5,14 @@ import type { Occupant, RoomEnter, RoomEvent, SnapshotPayload } from '../api/typ
 import { useToast } from '../components/Toasts'
 import { getGuestId } from '../lib/guest'
 import { isAlertSoundOn, playChime } from '../lib/preferences'
+import { DEFAULT_ROOM_SIZE, getRoomSize } from '../lib/roomSize'
 
 export type Connection = 'idle' | 'connecting' | 'connected' | 'reconnecting'
 
 interface RoomState {
   roomId: string | null
+  /** 열람실 인원(자리 수) */
+  seatCount: number
   mySeatNo: number | null
   nickname: string | null
   seats: Record<number, Occupant | null>
@@ -21,12 +24,14 @@ interface RoomState {
 }
 
 interface RoomApi extends RoomState {
-  enter: () => Promise<RoomEnter>
+  /** 인원을 주지 않으면 브라우저에 기억한 인원으로 들어간다. 인원이 바뀌면 새 방이 된다. */
+  enter: (seatCount?: number) => Promise<RoomEnter>
   leave: () => void
 }
 
 const EMPTY: RoomState = {
   roomId: null,
+  seatCount: DEFAULT_ROOM_SIZE,
   mySeatNo: null,
   nickname: null,
   seats: {},
@@ -64,6 +69,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           setState((s) => ({
             ...s,
             seats,
+            seatCount: payload.seatCount ?? s.seatCount,
             mySeatNo: payload.mySeatNo,
             nickname: seats[payload.mySeatNo]?.nickname ?? s.nickname,
             offsetMs: Date.parse(payload.serverTime) - Date.now(),
@@ -148,10 +154,20 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     client.activate()
   }, [subscribeAll])
 
-  const enter = useCallback(async () => {
-    const entered = await api.enterRoom()
+  const enter = useCallback(async (seatCount: number = getRoomSize()) => {
+    const entered = await api.enterRoom(seatCount)
+    const changed = roomIdRef.current !== entered.roomId
     roomIdRef.current = entered.roomId
-    setState((s) => ({ ...s, roomId: entered.roomId, mySeatNo: entered.seatNo, nickname: entered.nickname }))
+    if (changed) seatsRef.current = {}
+    setState((s) => ({
+      ...s,
+      roomId: entered.roomId,
+      seatCount: entered.seatCount,
+      mySeatNo: entered.seatNo,
+      nickname: entered.nickname,
+      // 새 방이면 스냅샷이 올 때까지 이전 방 자리를 비운다
+      seats: changed ? {} : s.seats,
+    }))
     connect()
     return entered
   }, [connect])

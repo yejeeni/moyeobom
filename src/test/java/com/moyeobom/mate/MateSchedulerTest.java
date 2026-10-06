@@ -105,7 +105,7 @@ class MateSchedulerTest {
     void 처음에_빈_자리는_시간이_지나면_새_메이트가_집중_상태로_들어온다() {
         mateScheduler = newMateScheduler(1);
         Room sparse = createRoom();
-        for (long seed = 2; sparse.occupiedCount() == Room.SEAT_COUNT; seed++) {
+        for (long seed = 2; sparse.occupiedCount() == Room.MAX_SEAT_COUNT; seed++) {
             mateScheduler = newMateScheduler(seed);
             sparse = createRoom();
         }

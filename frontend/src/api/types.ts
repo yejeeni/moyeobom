@@ -64,6 +64,7 @@ export interface MyStatus {
 
 export interface RoomEnter {
   roomId: string
+  seatCount: number
   seatNo: number
   nickname: string
 }
@@ -103,6 +104,7 @@ export interface RoomEvent<P = unknown> {
 
 export interface SnapshotPayload {
   serverTime: string
+  seatCount: number
   mySeatNo: number
   seats: { seatNo: number; occupant: Occupant | null }[]
 }

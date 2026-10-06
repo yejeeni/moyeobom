@@ -1,6 +1,8 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react'
 import type { CarriedTask, CarryoverTask, NewTask } from '../api/types'
+import { getRoomSize, setRoomSize } from '../lib/roomSize'
 import { formatDuration } from '../lib/time'
+import { Icon } from './Icon'
 
 interface CarryDraft extends CarryoverTask {
   included: boolean
@@ -25,6 +27,12 @@ export function PlanPanel({ carryover, entering, onEnter }: Props) {
     carryover.map((t) => ({ ...t, included: true, minutes: '' })),
   )
   const [tasks, setTasks] = useState<NewTask[]>([])
+  const [size, setSize] = useState(getRoomSize)
+  const changeSize = (next: number) => {
+    const clamped = Math.min(9, Math.max(1, next))
+    setSize(clamped)
+    setRoomSize(clamped)
+  }
   const [title, setTitle] = useState('')
   const [minutes, setMinutes] = useState('')
   const [example, setExample] = useState(0)
@@ -149,6 +157,22 @@ export function PlanPanel({ carryover, entering, onEnter }: Props) {
       ) : (
         total === 0 && <p className="empty">오늘 할 일 하나만 적어볼까요?</p>
       )}
+
+      <div className="room-size-picker">
+        <span id="plan-room-size">열람실 인원</span>
+        <div className="stepper">
+          <button type="button" onClick={() => changeSize(size - 1)} disabled={size <= 1} aria-label="한 명 줄이기">
+            <Icon name="minus" size={16} />
+          </button>
+          <output className="stepper-value" aria-labelledby="plan-room-size">
+            {size}
+          </output>
+          <span className="stepper-unit">명</span>
+          <button type="button" onClick={() => changeSize(size + 1)} disabled={size >= 9} aria-label="한 명 늘리기">
+            <Icon name="plus" size={16} />
+          </button>
+        </div>
+      </div>
 
       <button className="button primary large enter-button" onClick={enter} disabled={total === 0 || entering}>
         {entering ? (

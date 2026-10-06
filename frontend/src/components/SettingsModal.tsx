@@ -9,15 +9,20 @@ interface Props {
   onClose: () => void
   /** 있으면 '내 캐릭터' 항목을 보여 준다 */
   onOpenCharacters?: () => void
+  /** 지금 열람실 인원. 있으면 인원 항목을 보여 준다 */
+  roomSize?: number
+  /** 인원을 바꿔 저장하면 부른다(새 방으로 들어간다) */
+  onRoomSizeChange?: (size: number) => Promise<void>
 }
 
-export function SettingsModal({ onClose, onOpenCharacters }: Props) {
+export function SettingsModal({ onClose, onOpenCharacters, roomSize, onRoomSizeChange }: Props) {
   const toast = useToast()
   const [enabled, setEnabled] = useState(false)
   const [minutes, setMinutes] = useState('50')
   const [sound, setSound] = useState(isAlertSoundOn())
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [size, setSize] = useState(roomSize ?? 9)
 
   useEffect(() => {
     api.getSetting()
@@ -40,7 +45,12 @@ export function SettingsModal({ onClose, onOpenCharacters }: Props) {
     try {
       await api.updateSetting({ breakAlertEnabled: enabled, breakAlertMinutes: minutesValue })
       setAlertSound(sound)
-      toast.show('설정을 저장했어요')
+      if (roomSize !== undefined && size !== roomSize && onRoomSizeChange) {
+        await onRoomSizeChange(size)
+        toast.show(`${size}명 열람실로 옮겼어요`)
+      } else {
+        toast.show('설정을 저장했어요')
+      }
       onClose()
     } catch (e) {
       toast.show((e as Error).message, 'error')
@@ -111,6 +121,32 @@ export function SettingsModal({ onClose, onOpenCharacters }: Props) {
           </button>
         </div>
       </div>
+
+      {roomSize !== undefined && (
+        <div className="setting-group">
+          <div className="setting-row">
+            <span className="setting-icon">
+              <Icon name="users" size={18} />
+            </span>
+            <span className="setting-text">
+              <strong id="room-size-label">열람실 인원</strong>
+              <small>나를 포함한 자리 수예요. 바꾸면 새 열람실로 옮겨요</small>
+            </span>
+            <div className="stepper">
+              <button type="button" onClick={() => setSize((v) => Math.max(1, v - 1))} disabled={size <= 1} aria-label="한 명 줄이기">
+                <Icon name="minus" size={16} />
+              </button>
+              <output className="stepper-value" aria-labelledby="room-size-label">
+                {size}
+              </output>
+              <span className="stepper-unit">명</span>
+              <button type="button" onClick={() => setSize((v) => Math.min(9, v + 1))} disabled={size >= 9} aria-label="한 명 늘리기">
+                <Icon name="plus" size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {onOpenCharacters && (
         <div className="setting-group">

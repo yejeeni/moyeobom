@@ -13,12 +13,15 @@ import lombok.Getter;
  */
 public class Room {
 
-    public static final int SEAT_COUNT = 9;
+    /** 한 방의 최대 자리 수. 인원은 1~9명 중에서 고른다. */
+    public static final int MAX_SEAT_COUNT = 9;
 
     @Getter
     private final String roomId;
     @Getter
     private final Long ownerGuestId;
+    @Getter
+    private final int seatCount;
     @Getter
     private final int mySeatNo;
     private final List<Seat> seats;
@@ -29,14 +32,23 @@ public class Room {
     @Getter
     private boolean closed;
 
-    public Room(String roomId, Long ownerGuestId, int mySeatNo) {
-        if (mySeatNo < 1 || mySeatNo > SEAT_COUNT) {
-            throw new IllegalArgumentException("자리 번호는 1~9입니다: " + mySeatNo);
+    public Room(String roomId, Long ownerGuestId, int seatCount, int mySeatNo) {
+        if (seatCount < 1 || seatCount > MAX_SEAT_COUNT) {
+            throw new IllegalArgumentException("인원은 1~9명입니다: " + seatCount);
+        }
+        if (mySeatNo < 1 || mySeatNo > seatCount) {
+            throw new IllegalArgumentException("자리 번호는 1~" + seatCount + "입니다: " + mySeatNo);
         }
         this.roomId = roomId;
         this.ownerGuestId = ownerGuestId;
+        this.seatCount = seatCount;
         this.mySeatNo = mySeatNo;
-        this.seats = IntStream.rangeClosed(1, SEAT_COUNT).mapToObj(Seat::new).toList();
+        this.seats = IntStream.rangeClosed(1, seatCount).mapToObj(Seat::new).toList();
+    }
+
+    /** 9명짜리 방 */
+    public Room(String roomId, Long ownerGuestId, int mySeatNo) {
+        this(roomId, ownerGuestId, MAX_SEAT_COUNT, mySeatNo);
     }
 
     public <T> T withLock(Supplier<T> action) {

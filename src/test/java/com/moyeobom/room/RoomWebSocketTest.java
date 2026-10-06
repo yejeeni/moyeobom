@@ -134,6 +134,39 @@ class RoomWebSocketTest extends IntegrationTestSupport {
     }
 
     @Test
+    void 인원을_고르면_그_수만큼_자리가_생기고_다른_인원으로_들어오면_새_방이_된다() throws Exception {
+        startSprint();
+        Map<String, Object> small = enter("{\"seatCount\": 3}");
+        assertThat(small.get("seatCount")).isEqualTo(3);
+        assertThat((Integer) small.get("seatNo")).isBetween(1, 3);
+
+        StompSession session = connect(guest);
+        BlockingQueue<Map<String, Object>> snapshots = subscribe(session, "/user/queue/room-snapshot");
+        Map<String, Object> snapshot = poll(snapshots, event -> true);
+        assertThat((Integer) JsonPath.read(snapshot, "$.payload.seatCount")).isEqualTo(3);
+        assertThat((List<?>) JsonPath.read(snapshot, "$.payload.seats")).hasSize(3);
+
+        // 같은 인원이면 같은 방, 다른 인원이면 새 방
+        assertThat(enter("{\"seatCount\": 3}").get("roomId")).isEqualTo(small.get("roomId"));
+        Map<String, Object> solo = enter("{\"seatCount\": 1}");
+        assertThat(solo.get("roomId")).isNotEqualTo(small.get("roomId"));
+        assertThat(solo.get("seatNo")).isEqualTo(1);
+        // 인원을 보내지 않으면 9명
+        assertThat(enter().get("seatCount")).isEqualTo(9);
+    }
+
+    @Test
+    void 인원은_1에서_9명까지만_고를_수_있다() throws Exception {
+        startSprint();
+        for (String body : new String[]{"{\"seatCount\": 0}", "{\"seatCount\": 10}"}) {
+            mockMvc.perform(post("/api/v1/rooms/enter").header("X-Guest-Id", guest)
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        }
+    }
+
+    @Test
     void 방이_없으면_ROOM_NOT_FOUND를_받는다() throws Exception {
         StompSession session = connect(guest);
         BlockingQueue<Map<String, Object>> snapshots = subscribe(session, "/user/queue/room-snapshot");
@@ -151,6 +184,14 @@ class RoomWebSocketTest extends IntegrationTestSupport {
 
     private Map<String, Object> enter() throws Exception {
         String body = mockMvc.perform(post("/api/v1/rooms/enter").header("X-Guest-Id", guest))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(body, "$");
+    }
+
+    private Map<String, Object> enter(String json) throws Exception {
+        String body = mockMvc.perform(post("/api/v1/rooms/enter").header("X-Guest-Id", guest)
+                        .contentType(MediaType.APPLICATION_JSON).content(json))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$");

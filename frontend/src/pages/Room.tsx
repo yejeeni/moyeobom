@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { isApiError } from '../api/client'
@@ -13,10 +13,10 @@ import { TaskPanel } from '../components/TaskPanel'
 import { useToast } from '../components/Toasts'
 import { getGuestId } from '../lib/guest'
 import { STATE_LABEL, elapsedSeconds, formatClock, useNow } from '../lib/time'
+import { setRoomSize, useTileLayout } from '../lib/roomSize'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { useRoom } from '../room/RoomContext'
 
-const SEAT_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 export function Room() {
   const navigate = useNavigate()
@@ -34,6 +34,17 @@ export function Room() {
   const panelOpen = compact ? panelCompact : panelWide
   const setPanelOpen = compact ? setPanelCompact : setPanelWide
   const [modal, setModal] = useState<'guide' | 'settings' | 'characters' | null>(null)
+  const gridRef = useRef<HTMLElement>(null)
+  const layout = useTileLayout(gridRef, room.seatCount, compact ? 4 : 6)
+  const tileGap = compact ? 4 : 6
+  // 칸 묶음의 폭을 '열 수 x 칸 폭'으로 맞춰 정확히 그 열 수로 줄바꿈되게 한다
+  const tileStyle = layout
+    ? ({
+        '--tile-w': `${layout.width}px`,
+        '--tile-h': `${layout.height}px`,
+        width: `${layout.columns * layout.width + (layout.columns - 1) * tileGap}px`,
+      } as CSSProperties)
+    : undefined
 
   const applyStatus = useCallback((status: MyStatus) => {
     setStatusOffset(Date.parse(status.serverTime) - Date.now())
@@ -139,6 +150,12 @@ export function Room() {
     toast.show('먼저 오늘 할 일을 추가해 주세요')
   }
 
+  // 인원을 바꾸면 그 인원의 새 방으로 들어간다(자리·닉네임은 새로, 할 일과 기록은 그대로)
+  const changeRoomSize = async (size: number) => {
+    setRoomSize(size)
+    await room.enter(size)
+  }
+
   const finishToday = () =>
     run(async () => {
       if (myStatus?.state === 'FOCUS') applyStatus(await api.stopFocus('STOPPED'))
@@ -153,6 +170,7 @@ export function Room() {
   const myElapsed = state === 'IDLE' ? 0 : elapsedSeconds(myStatus?.since, now, statusOffset)
 
   const seatCharacters = useSeatCharacters(room.roomId, room.seats, room.mySeatNo)
+  const SEAT_NUMBERS = Array.from({ length: room.seatCount }, (_, i) => i + 1)
   const occupied = SEAT_NUMBERS.filter((n) => room.seats[n]).length
   const focusing = SEAT_NUMBERS.filter((n) => room.seats[n]?.state === 'FOCUS').length
   const hasSeats = occupied > 0
@@ -197,25 +215,31 @@ export function Room() {
       )}
 
       <div className="room-body">
-        <main className="seat-grid" aria-label="열람실 자리">
-          {hasSeats
-            ? SEAT_NUMBERS.map((n) => (
-                <SeatTile
-                  key={n}
-                  seatNo={n}
-                  occupant={room.seats[n] ?? null}
-                  isMe={n === room.mySeatNo}
-                  now={now}
-                  offsetMs={room.offsetMs}
-                  compact={compact}
-                  character={seatCharacters[n]}
-                />
-              ))
-            : SEAT_NUMBERS.map((n) => (
-                <div key={n} className="seat seat-empty seat-loading">
-                  {n === 5 && <span>자리 찾는 중…</span>}
-                </div>
-              ))}
+        <main
+          ref={gridRef}
+          className={`seat-grid seats-${room.seatCount}`}
+          aria-label="열람실 자리"
+        >
+          <div className="seat-tiles" style={tileStyle}>
+            {hasSeats
+              ? SEAT_NUMBERS.map((n) => (
+                  <SeatTile
+                    key={n}
+                    seatNo={n}
+                    occupant={room.seats[n] ?? null}
+                    isMe={n === room.mySeatNo}
+                    now={now}
+                    offsetMs={room.offsetMs}
+                    compact={compact}
+                    character={seatCharacters[n]}
+                  />
+                ))
+              : SEAT_NUMBERS.map((n) => (
+                  <div key={n} className="seat seat-empty seat-loading">
+                    {n === Math.ceil(room.seatCount / 2) && <span>자리 찾는 중…</span>}
+                  </div>
+                ))}
+          </div>
         </main>
         {/* 넓은 화면에서는 늘 그려 두고 CSS로 밀어 넣고 뺀다 */}
         {(panelOpen || !compact) && (
@@ -274,7 +298,12 @@ export function Room() {
 
       {modal === 'guide' && <GuideModal onClose={() => setModal(null)} />}
       {modal === 'settings' && (
-        <SettingsModal onClose={() => setModal(null)} onOpenCharacters={() => setModal('characters')} />
+        <SettingsModal
+          onClose={() => setModal(null)}
+          onOpenCharacters={() => setModal('characters')}
+          roomSize={room.seatCount}
+          onRoomSizeChange={changeRoomSize}
+        />
       )}
       {modal === 'characters' && <CharacterModal onClose={() => setModal(null)} />}
     </div>

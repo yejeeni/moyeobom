@@ -2471,3 +2471,43 @@ input[aria-invalid='true'] {
   font-size: 1.4rem;
   line-height: 1;
 }
+
+/* ---------- 열람실 인원: 인원에 따라 칸 수와 크기를 맞춘다 ---------- */
+/* 영역(.seat-grid)을 재서 칸 크기와 열 수를 정하고, 칸 묶음(.seat-tiles)을 가운데에 둔다.
+   마지막 줄이 덜 차면 그 줄도 가운데로 모은다 */
+.seat-grid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.seat-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: center;
+  gap: 6px;
+  max-width: 100%;
+  max-height: 100%;
+}
+.is-compact .seat-tiles {
+  gap: 4px;
+}
+.seat-tiles > .seat {
+  flex: none;
+  width: var(--tile-w, 0);
+  height: var(--tile-h, 0);
+}
+.stepper-value {
+  min-width: 28px;
+  text-align: right;
+  font-weight: 700;
+  color: var(--text);
+}
+.room-size-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}

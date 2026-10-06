@@ -71,11 +71,18 @@ export function describeMissing(keys: FrameKey[]): string[] {
 }
 
 function builtin(id: string, name: string, tempo: Tempo): CharacterAsset {
-  const available = Object.fromEntries(FRAME_KEYS.map((key) => [key, `/characters/${id}/${key}.png`])) as Record<FrameKey, string>
+  const available = Object.fromEntries(FRAME_KEYS.map((key) => [key, `/characters/${id}/${key}.webp`])) as Record<FrameKey, string>
   return { id: `builtin:${id}`, name, source: 'builtin', tempo, frames: resolveFrames(available)!, background: null }
 }
 
-export const BUILTIN_CHARACTERS: CharacterAsset[] = [builtin('laptop', '노트북', 'typing')]
+export const BUILTIN_CHARACTERS: CharacterAsset[] = [
+  builtin('laptop', '동글이', 'typing'),
+  builtin('rabbit', '토끼', 'typing'),
+  builtin('penguin-blue', '파랑 펭귄', 'typing'),
+  builtin('tabby-cat', '고등어 고양이', 'typing'),
+  builtin('cream-cat', '크림 고양이', 'typing'),
+  builtin('penguin', '펭귄', 'typing'),
+]
 
 /** 서버가 준 파츠 번호로 기본 캐릭터를 고른다(소개 화면 미리보기용). */
 export function pickBuiltin(parts: CharacterParts): CharacterAsset {

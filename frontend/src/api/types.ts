@@ -64,7 +64,11 @@ export interface MyStatus {
 
 export interface RoomEnter {
   roomId: string
+  /** 입장 코드. 실제 자리가 2개 이상이면 다른 사람에게 나눠 준다 */
+  code: string
   seatCount: number
+  /** 실제 사람 자리 수(나 포함) */
+  realSeatCount: number
   seatNo: number
   nickname: string
 }
@@ -102,11 +106,21 @@ export interface RoomEvent<P = unknown> {
   payload: P
 }
 
+export interface RoomLookup {
+  code: string
+  seatCount: number
+  realSeatCount: number
+  /** 아직 비어 있는 실제 자리 수 */
+  waitingSeatCount: number
+}
+
 export interface SnapshotPayload {
   serverTime: string
+  code: string
   seatCount: number
   mySeatNo: number
-  seats: { seatNo: number; occupant: Occupant | null }[]
+  /** waiting: 비어 있는 실제 사람 자리(초대 대기) */
+  seats: { seatNo: number; occupant: Occupant | null; waiting: boolean }[]
 }
 
 export interface ReviewTask {

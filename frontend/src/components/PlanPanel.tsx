@@ -1,8 +1,8 @@
-import { useEffect, useState, type CSSProperties, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from 'react'
 import type { CarriedTask, CarryoverTask, NewTask } from '../api/types'
-import { getRoomSize, setRoomSize } from '../lib/roomSize'
+import { getRoomConfig, setRoomConfig } from '../lib/roomSize'
 import { formatDuration } from '../lib/time'
-import { Icon } from './Icon'
+import { RoomChoice, type CodeStatus, type RoomChoiceValue } from './RoomChoice'
 
 interface CarryDraft extends CarryoverTask {
   included: boolean
@@ -12,7 +12,9 @@ interface CarryDraft extends CarryoverTask {
 interface Props {
   carryover: CarryoverTask[]
   entering: boolean
-  onEnter: (tasks: NewTask[], carriedTasks: CarriedTask[]) => void
+  onEnter: (tasks: NewTask[], carriedTasks: CarriedTask[], room: RoomChoiceValue) => void
+  /** 초대 링크로 왔을 때 미리 채울 코드 */
+  initialCode?: string
 }
 
 // 입력칸 예시가 몇 초마다 바뀐다
@@ -22,17 +24,21 @@ const EXAMPLES = ['알고리즘 3문제 풀기', '영어 단어 50개 외우기'
  * 스프린트 계획 입력. 첫 화면 소개 문구 아래에 놓인다.
  * 나중에 회원 기능이 생기면 같은 자리에서 로그인 패널과 바꿔 끼운다.
  */
-export function PlanPanel({ carryover, entering, onEnter }: Props) {
+export function PlanPanel({ carryover, entering, onEnter, initialCode }: Props) {
   const [carry, setCarry] = useState<CarryDraft[]>(() =>
     carryover.map((t) => ({ ...t, included: true, minutes: '' })),
   )
   const [tasks, setTasks] = useState<NewTask[]>([])
-  const [size, setSize] = useState(getRoomSize)
-  const changeSize = (next: number) => {
-    const clamped = Math.min(9, Math.max(1, next))
-    setSize(clamped)
-    setRoomSize(clamped)
+  const [room, setRoom] = useState<RoomChoiceValue>(() =>
+    initialCode ? { mode: 'join', code: initialCode } : { mode: 'create', config: getRoomConfig() },
+  )
+  const [codeStatus, setCodeStatus] = useState<CodeStatus>({ kind: 'empty' })
+  const changeRoom = (next: RoomChoiceValue) => {
+    setRoom(next)
+    if (next.mode === 'create') setRoomConfig(next.config)
   }
+  const onCodeStatus = useCallback((status: CodeStatus) => setCodeStatus(status), [])
+  const canEnterRoom = room.mode === 'create' || codeStatus.kind === 'ready'
   const [title, setTitle] = useState('')
   const [minutes, setMinutes] = useState('')
   const [example, setExample] = useState(0)
@@ -64,6 +70,7 @@ export function PlanPanel({ carryover, entering, onEnter }: Props) {
     onEnter(
       tasks,
       included.map((t) => ({ fromTaskId: t.taskId, estimatedMinutes: t.minutes ? Number(t.minutes) : null })),
+      room,
     )
 
   return (
@@ -158,28 +165,14 @@ export function PlanPanel({ carryover, entering, onEnter }: Props) {
         total === 0 && <p className="empty">오늘 할 일 하나만 적어볼까요?</p>
       )}
 
-      <div className="room-size-picker">
-        <span id="plan-room-size">열람실 인원</span>
-        <div className="stepper">
-          <button type="button" onClick={() => changeSize(size - 1)} disabled={size <= 1} aria-label="한 명 줄이기">
-            <Icon name="minus" size={16} />
-          </button>
-          <output className="stepper-value" aria-labelledby="plan-room-size">
-            {size}
-          </output>
-          <span className="stepper-unit">명</span>
-          <button type="button" onClick={() => changeSize(size + 1)} disabled={size >= 9} aria-label="한 명 늘리기">
-            <Icon name="plus" size={16} />
-          </button>
-        </div>
-      </div>
+      <RoomChoice value={room} onChange={changeRoom} onCodeStatus={onCodeStatus} />
 
-      <button className="button primary large enter-button" onClick={enter} disabled={total === 0 || entering}>
+      <button className="button primary large enter-button" onClick={enter} disabled={total === 0 || entering || !canEnterRoom}>
         {entering ? (
           '자리 찾는 중…'
         ) : (
           <>
-            열람실 입장하기
+            {room.mode === 'join' ? '코드로 입장하기' : '열람실 입장하기'}
             {total > 0 && (
               <span className="enter-meta">
                 {total}개{plannedMinutes > 0 && ` · ${formatDuration(plannedMinutes * 60)}`}

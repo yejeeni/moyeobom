@@ -248,6 +248,8 @@ input[aria-invalid='true'] {
 }
 .hero-copy {
   display: grid;
+  /* 내용의 최소 폭에 끌려 화면보다 넓어지지 않게 한다 */
+  grid-template-columns: minmax(0, 1fr);
   gap: 32px;
   max-width: 540px;
 }
@@ -311,6 +313,7 @@ input[aria-invalid='true'] {
 /* 계획 카드 */
 .plan-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   padding: 24px;
   border-radius: 24px;
@@ -752,7 +755,8 @@ input[aria-invalid='true'] {
     min-height: 0;
   }
   .hero-inner {
-    grid-template-columns: 1fr;
+    /* 1fr만 쓰면 미리보기의 최소 폭에 끌려 화면보다 넓어진다 */
+    grid-template-columns: minmax(0, 1fr);
     max-width: 620px;
   }
   .hero-copy {
@@ -2510,4 +2514,139 @@ input[aria-invalid='true'] {
   gap: 12px;
   font-size: 0.9rem;
   color: var(--text-muted);
+}
+
+/* ---------- 열람실 고르기: 새 열람실(가상 + 실제) / 코드로 입장 ---------- */
+.room-choice {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+.room-mode {
+  display: flex;
+  width: 100%;
+}
+.room-mode label {
+  flex: 1;
+  text-align: center;
+}
+.room-config {
+  display: grid;
+  gap: 10px;
+}
+.room-config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.room-config-label {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.room-config-label strong {
+  font-size: 0.92rem;
+  color: var(--text);
+}
+.room-config-label small {
+  font-size: 0.76rem;
+}
+.room-config-note {
+  margin: 0;
+}
+.room-join {
+  display: grid;
+  gap: 6px;
+}
+.code-input {
+  width: 100%;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  text-align: center;
+  text-transform: uppercase;
+  padding: 10px 12px;
+}
+.code-status {
+  margin: 0;
+  color: var(--text-muted);
+}
+.code-ready {
+  color: var(--focus);
+}
+.code-full,
+.code-notFound,
+.code-error {
+  color: #f0a3a5;
+}
+.setting-room {
+  display: block;
+  padding-left: 16px;
+}
+
+/* 열람실 상단의 입장 코드: 누르면 초대 링크를 복사한다 */
+.code-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 207, 122, 0.35);
+  border-radius: 999px;
+  background: rgba(255, 207, 122, 0.1);
+  color: var(--text);
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.code-chip:hover {
+  background: rgba(255, 207, 122, 0.18);
+}
+.code-chip strong {
+  color: var(--lamp);
+  letter-spacing: 0.08em;
+}
+.code-label,
+.code-waiting {
+  color: var(--text-muted);
+}
+.topbar-right {
+  gap: 8px;
+  align-items: center;
+}
+.is-compact .code-waiting,
+.is-compact .code-label {
+  display: none;
+}
+
+/* 비어 있는 실제 자리: 누군가 코드로 들어오기를 기다린다 */
+.seat-waiting {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #a69fb2;
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 207, 122, 0.05) 0 12px, transparent 12px 24px),
+    #17141d;
+  outline: 1px dashed rgba(255, 207, 122, 0.3);
+  outline-offset: -6px;
+}
+.waiting-mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 207, 122, 0.5);
+}
+button.seat-waiting {
+  border: none;
+  font: inherit;
+  cursor: pointer;
+}
+button.seat-waiting:hover {
+  background-color: #1d1924;
+}
+.waiting-code {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  color: var(--lamp);
 }

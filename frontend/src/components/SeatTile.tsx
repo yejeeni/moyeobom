@@ -19,6 +19,12 @@ interface Props {
   compact: boolean
   /** 이 자리에 배정된 캐릭터. 없으면 기본 캐릭터 */
   character?: CharacterAsset
+  /** 비어 있는 실제 사람 자리(코드로 누군가 들어오기를 기다린다) */
+  waiting?: boolean
+  /** 초대 대기 칸에 보여 줄 입장 코드 */
+  code?: string | null
+  /** 초대 대기 칸을 누르면 초대 링크를 복사한다 */
+  onInvite?: () => void
 }
 
 interface SeatEvent {
@@ -57,11 +63,22 @@ function useSeatEvent(occupant: Occupant | null, isMe: boolean): SeatEvent | nul
   return event
 }
 
-export function SeatTile({ seatNo, occupant, isMe, now, offsetMs, compact, character }: Props) {
+export function SeatTile({ seatNo, occupant, isMe, now, offsetMs, compact, character, waiting = false, code, onInvite }: Props) {
   const event = useSeatEvent(occupant, isMe)
 
   if (!occupant) {
-    return (
+    return waiting ? (
+      <button
+        type="button"
+        className="seat seat-empty seat-waiting"
+        onClick={onInvite}
+        aria-label={`${seatNo}번 자리, 초대 대기${code ? `, 코드 ${code}. 누르면 초대 링크를 복사해요` : ''}`}
+      >
+        <span className="waiting-mark" aria-hidden="true" />
+        <span>초대 대기</span>
+        {code && <span className="waiting-code">코드 {code}</span>}
+      </button>
+    ) : (
       <div className="seat seat-empty" aria-label={`${seatNo}번 빈자리`}>
         <span>빈자리</span>
       </div>

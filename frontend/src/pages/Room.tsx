@@ -13,7 +13,8 @@ import { TaskPanel } from '../components/TaskPanel'
 import { useToast } from '../components/Toasts'
 import { getGuestId } from '../lib/guest'
 import { STATE_LABEL, elapsedSeconds, formatClock, useNow } from '../lib/time'
-import { setRoomSize, useTileLayout } from '../lib/roomSize'
+import type { RoomChoiceValue } from '../components/RoomChoice'
+import { setRoomConfig, useTileLayout } from '../lib/roomSize'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { useRoom } from '../room/RoomContext'
 
@@ -150,10 +151,27 @@ export function Room() {
     toast.show('먼저 오늘 할 일을 추가해 주세요')
   }
 
-  // 인원을 바꾸면 그 인원의 새 방으로 들어간다(자리·닉네임은 새로, 할 일과 기록은 그대로)
-  const changeRoomSize = async (size: number) => {
-    setRoomSize(size)
-    await room.enter(size)
+  // 새 구성으로 방을 만들거나 코드로 다른 방에 들어간다(자리·닉네임은 새로, 할 일과 기록은 그대로)
+  const changeRoom = async (choice: RoomChoiceValue) => {
+    if (choice.mode === 'create') {
+      setRoomConfig(choice.config)
+      await room.create(choice.config)
+      toast.show('새 열람실을 열었어요')
+    } else {
+      await room.join(choice.code)
+      toast.show('코드 열람실로 들어왔어요')
+    }
+  }
+
+  const copyInvite = async () => {
+    if (!room.code) return
+    const link = `${window.location.origin}/r/${room.code}`
+    try {
+      await navigator.clipboard.writeText(link)
+      toast.show('초대 링크를 복사했어요')
+    } catch {
+      toast.show(`초대 코드: ${room.code}`)
+    }
   }
 
   const finishToday = () =>
@@ -174,6 +192,8 @@ export function Room() {
   const occupied = SEAT_NUMBERS.filter((n) => room.seats[n]).length
   const focusing = SEAT_NUMBERS.filter((n) => room.seats[n]?.state === 'FOCUS').length
   const hasSeats = occupied > 0
+  const waitingCount = SEAT_NUMBERS.filter((n) => room.waiting[n]).length
+  const shared = room.realSeatCount > 1
 
   return (
     <div className={`room-page ${compact ? 'is-compact' : ''} ${panelOpen ? 'panel-open' : ''}`}>
@@ -205,7 +225,16 @@ export function Room() {
             {state === 'BREAK' && <span className="caption-text">잠깐 쉬는 중이에요</span>}
           </div>
         </div>
-        <div className="topbar-right">{room.nickname && <span className="me-chip">나 · {room.nickname}</span>}</div>
+        <div className="topbar-right">
+          {shared && room.code && (
+            <button className="code-chip" onClick={copyInvite} title="초대 링크 복사">
+              <span className="code-label">코드</span>
+              <strong>{room.code}</strong>
+              {waitingCount > 0 && <span className="code-waiting">{waitingCount}자리 남음</span>}
+            </button>
+          )}
+          {room.nickname && <span className="me-chip">나 · {room.nickname}</span>}
+        </div>
       </header>
 
       {room.connection === 'reconnecting' && (
@@ -232,6 +261,9 @@ export function Room() {
                     offsetMs={room.offsetMs}
                     compact={compact}
                     character={seatCharacters[n]}
+                    waiting={Boolean(room.waiting[n])}
+                    code={room.code}
+                    onInvite={copyInvite}
                   />
                 ))
               : SEAT_NUMBERS.map((n) => (
@@ -301,8 +333,8 @@ export function Room() {
         <SettingsModal
           onClose={() => setModal(null)}
           onOpenCharacters={() => setModal('characters')}
-          roomSize={room.seatCount}
-          onRoomSizeChange={changeRoomSize}
+          roomConfig={{ virtualSeats: room.seatCount - room.realSeatCount, realSeats: room.realSeatCount }}
+          onRoomChange={changeRoom}
         />
       )}
       {modal === 'characters' && <CharacterModal onClose={() => setModal(null)} />}

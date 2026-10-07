@@ -1,5 +1,5 @@
 import { useEffect, useState, type PointerEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { isApiError } from '../api/client'
 import type { CarriedTask, CarryoverTask, NewTask } from '../api/types'
@@ -9,8 +9,11 @@ import { GuideModal } from '../components/GuideModal'
 import { HowItWorks } from '../components/HowItWorks'
 import { IntroPanel } from '../components/IntroPanel'
 import { PlanPanel } from '../components/PlanPanel'
+import type { RoomChoiceValue } from '../components/RoomChoice'
 import { useToast } from '../components/Toasts'
 import { getGuestId, saveGuestId } from '../lib/guest'
+import { CODE_LENGTH, normalizeCode } from '../lib/roomSize'
+import { useRoom } from '../room/RoomContext'
 
 /**
  * 첫 화면 = 소개 문구와 스프린트 계획(왼쪽) + 열람실 미리보기(오른쪽), 아래로 이용 순서.
@@ -19,6 +22,10 @@ import { getGuestId, saveGuestId } from '../lib/guest'
 export function Home() {
   const navigate = useNavigate()
   const toast = useToast()
+  const room = useRoom()
+  // 초대 링크(/r/코드)로 오면 ?code=로 넘어온다
+  const [params] = useSearchParams()
+  const inviteCode = normalizeCode(params.get('code') ?? '').slice(0, CODE_LENGTH) || undefined
   const [carryover, setCarryover] = useState<CarryoverTask[] | null>(() => (getGuestId() ? null : []))
   const [entering, setEntering] = useState(false)
   const [guideOpen, setGuideOpen] = useState(false)
@@ -30,6 +37,8 @@ export function Home() {
       try {
         const me = await api.me()
         if (me.hasOpenSprint) {
+          // 이미 공부 중인 사람이 초대 링크로 오면 그 방으로 옮긴다
+          if (inviteCode) await joinOrWarn(inviteCode)
           navigate('/room', { replace: true })
           return
         }
@@ -40,19 +49,31 @@ export function Home() {
         setCarryover([])
       }
     })()
-  }, [navigate, toast])
+    // 처음 한 번만 실행한다
+  }, [])
 
-  const enter = async (tasks: NewTask[], carriedTasks: CarriedTask[]) => {
+  /** 코드로 들어가고, 실패하면 이유를 알려 준다(열람실 화면에서 새 방이 열린다) */
+  const joinOrWarn = async (code: string) => {
+    try {
+      await room.join(code)
+    } catch (e) {
+      toast.show(`코드로 들어가지 못했어요. ${(e as Error).message}`, 'error')
+    }
+  }
+
+  const enter = async (tasks: NewTask[], carriedTasks: CarriedTask[], choice: RoomChoiceValue) => {
     setEntering(true)
     try {
       if (!getGuestId()) saveGuestId((await api.issueGuest()).guestId)
-      await api.startSprint(tasks, carriedTasks)
+      try {
+        await api.startSprint(tasks, carriedTasks)
+      } catch (e) {
+        if (!isApiError(e, 'SPRINT_ALREADY_OPEN')) throw e
+      }
+      if (choice.mode === 'join') await joinOrWarn(choice.code)
+      else await room.create(choice.config)
       navigate('/room')
     } catch (e) {
-      if (isApiError(e, 'SPRINT_ALREADY_OPEN')) {
-        navigate('/room')
-        return
-      }
       toast.show((e as Error).message, 'error')
       setEntering(false)
     }
@@ -100,7 +121,7 @@ export function Home() {
                   오늘 계획을 불러오는 중…
                 </div>
               ) : (
-                <PlanPanel carryover={carryover} entering={entering} onEnter={enter} />
+                <PlanPanel carryover={carryover} entering={entering} onEnter={enter} initialCode={inviteCode} />
               )}
             </div>
             <DemoRoom onOpenGuide={() => setGuideOpen(true)} />

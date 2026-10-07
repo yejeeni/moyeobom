@@ -39,11 +39,17 @@ moyeobom:
     refill-delay:
       min: 30s
       max: 2m
-    majority-focus-count: 5
+    # 쉬면 집중 인원이 앉은 사람의 과반보다 적어질 때, 휴식 대신 집중을 늘리는 시간
     focus-extension:
       min: 5m
       max: 10m
     initial:
+      # 나를 빼고 처음 앉아 있는 메이트 수. 나머지 자리는 arrival-delay 뒤에 하나씩 채워진다
+      mate-count-min: 4
+      mate-count-max: 8
+      arrival-delay:
+        min: 1m
+        max: 15m
       focus-ratio: 0.8
       completed-count-max: 3
       remaining-count-min: 1

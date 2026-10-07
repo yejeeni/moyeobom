@@ -13,6 +13,7 @@ import java.lang.reflect.Type;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -83,7 +84,9 @@ class RoomWebSocketTest extends IntegrationTestSupport {
         assertThat(snapshot.get("type")).isEqualTo("ROOM_SNAPSHOT");
         assertThat((Integer) JsonPath.read(snapshot, "$.payload.mySeatNo")).isEqualTo(mySeat);
         List<Object> occupants = JsonPath.read(snapshot, "$.payload.seats[*].occupant");
-        assertThat(occupants).hasSize(9).doesNotContainNull();
+        assertThat(occupants).hasSize(9);
+        // 나 포함 5~9명이 앉아 있고, 나머지는 빈자리(null)다
+        assertThat(occupants.stream().filter(Objects::nonNull).count()).isBetween(5L, 9L);
         assertThat((String) JsonPath.read(snapshot, "$.payload.seats[" + (mySeat - 1) + "].occupant.nickname"))
                 .isEqualTo(entered.get("nickname"));
         assertThat((String) JsonPath.read(snapshot, "$.payload.seats[" + (mySeat - 1) + "].occupant.state"))
@@ -131,6 +134,39 @@ class RoomWebSocketTest extends IntegrationTestSupport {
     }
 
     @Test
+    void 인원을_고르면_그_수만큼_자리가_생기고_다른_인원으로_들어오면_새_방이_된다() throws Exception {
+        startSprint();
+        Map<String, Object> small = enter("{\"seatCount\": 3}");
+        assertThat(small.get("seatCount")).isEqualTo(3);
+        assertThat((Integer) small.get("seatNo")).isBetween(1, 3);
+
+        StompSession session = connect(guest);
+        BlockingQueue<Map<String, Object>> snapshots = subscribe(session, "/user/queue/room-snapshot");
+        Map<String, Object> snapshot = poll(snapshots, event -> true);
+        assertThat((Integer) JsonPath.read(snapshot, "$.payload.seatCount")).isEqualTo(3);
+        assertThat((List<?>) JsonPath.read(snapshot, "$.payload.seats")).hasSize(3);
+
+        // 같은 인원이면 같은 방, 다른 인원이면 새 방
+        assertThat(enter("{\"seatCount\": 3}").get("roomId")).isEqualTo(small.get("roomId"));
+        Map<String, Object> solo = enter("{\"seatCount\": 1}");
+        assertThat(solo.get("roomId")).isNotEqualTo(small.get("roomId"));
+        assertThat(solo.get("seatNo")).isEqualTo(1);
+        // 인원을 보내지 않으면 9명
+        assertThat(enter().get("seatCount")).isEqualTo(9);
+    }
+
+    @Test
+    void 인원은_1에서_9명까지만_고를_수_있다() throws Exception {
+        startSprint();
+        for (String body : new String[]{"{\"seatCount\": 0}", "{\"seatCount\": 10}"}) {
+            mockMvc.perform(post("/api/v1/rooms/enter").header("X-Guest-Id", guest)
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        }
+    }
+
+    @Test
     void 방이_없으면_ROOM_NOT_FOUND를_받는다() throws Exception {
         StompSession session = connect(guest);
         BlockingQueue<Map<String, Object>> snapshots = subscribe(session, "/user/queue/room-snapshot");
@@ -148,6 +184,14 @@ class RoomWebSocketTest extends IntegrationTestSupport {
 
     private Map<String, Object> enter() throws Exception {
         String body = mockMvc.perform(post("/api/v1/rooms/enter").header("X-Guest-Id", guest))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(body, "$");
+    }
+
+    private Map<String, Object> enter(String json) throws Exception {
+        String body = mockMvc.perform(post("/api/v1/rooms/enter").header("X-Guest-Id", guest)
+                        .contentType(MediaType.APPLICATION_JSON).content(json))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$");

@@ -5,7 +5,6 @@ import com.moyeobom.common.exception.BusinessException;
 import com.moyeobom.common.exception.ErrorCode;
 import com.moyeobom.focus.domain.MyState;
 import com.moyeobom.focus.service.FocusService;
-import com.moyeobom.mate.service.MateFactory.PlacedMate;
 import com.moyeobom.mate.service.MateScheduler;
 import com.moyeobom.room.config.RoomProperties;
 import com.moyeobom.room.domain.CharacterParts;
@@ -14,7 +13,6 @@ import com.moyeobom.room.domain.Occupant;
 import com.moyeobom.room.domain.OccupantKind;
 import com.moyeobom.room.domain.Room;
 import com.moyeobom.room.domain.RoomStatus;
-import com.moyeobom.room.domain.Seat;
 import com.moyeobom.room.dto.RoomDtos.CountsPayload;
 import com.moyeobom.room.dto.RoomDtos.NoticePayload;
 import com.moyeobom.room.dto.RoomDtos.OccupantView;
@@ -71,16 +69,23 @@ public class RoomService {
     }
 
     /**
-     * 열람실에 입장한다. 이미 방이 있으면 그 방을 돌려준다. 열린 스프린트에 할 일이 있어야 한다.
+     * 열람실에 입장한다. 열린 스프린트에 할 일이 있어야 한다.
+     * 이미 방이 있으면 그 방을 돌려주고, 인원이 다르면 그 방을 정리하고 새 인원으로 만든다.
+     *
+     * @param seatCount 인원(나 포함 1~9). null이면 9명
      */
-    public RoomEnterResponse enter(Long guestId) {
+    public RoomEnterResponse enter(Long guestId, Integer seatCount) {
+        int size = seatCount == null ? Room.MAX_SEAT_COUNT : seatCount;
+        if (size < 1 || size > Room.MAX_SEAT_COUNT) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "인원은 1~9명 중에서 골라 주세요.");
+        }
         TaskCounts counts = taskQueryService.countsOf(guestId);
         if (counts.total() == 0) {
             throw new BusinessException(ErrorCode.NO_TASK_FOR_ROOM);
         }
         MyState myState = focusService.getMyState(guestId);
-        Room room = findOrCreate(guestId, myState, counts);
-        return room.withLock(() -> new RoomEnterResponse(room.getRoomId(), room.getMySeatNo(),
+        Room room = findOrCreate(guestId, size, myState, counts);
+        return room.withLock(() -> new RoomEnterResponse(room.getRoomId(), room.getSeatCount(), room.getMySeatNo(),
                 room.mySeat().occupant().map(Occupant::getNickname).orElseThrow()));
     }
 
@@ -142,27 +147,27 @@ public class RoomService {
         roomRegistry.findByGuestId(guestId).ifPresent(this::close);
     }
 
-    private synchronized Room findOrCreate(Long guestId, MyState myState, TaskCounts counts) {
+    private synchronized Room findOrCreate(Long guestId, int seatCount, MyState myState, TaskCounts counts) {
         Optional<Room> existing = roomRegistry.findByGuestId(guestId);
         if (existing.isPresent()) {
-            return existing.get();
+            if (existing.get().getSeatCount() == seatCount) {
+                return existing.get();
+            }
+            // 인원을 바꾸면 기존 방을 정리하고 새로 만든다(자리와 닉네임도 새로 받는다)
+            close(existing.get());
         }
         Instant now = clock.instant();
-        Room room = new Room(newRoomId(), guestId, 1 + random.nextInt(Room.SEAT_COUNT));
+        Room room = new Room(newRoomId(), guestId, seatCount, 1 + random.nextInt(seatCount));
         room.withLock(() -> {
             room.mySeat().sit(new Occupant(Nicknames.random(random), CharacterParts.random(random),
                     OccupantKind.REAL, myState.state(), myState.since(), counts.completedCount(),
                     counts.remainingCount()));
-            List<Seat> mateSeats = room.mateSeats();
-            List<PlacedMate> mates = mateScheduler.createInitialMates(mateSeats.size(), now);
-            for (int i = 0; i < mateSeats.size(); i++) {
-                mateScheduler.seat(room, mateSeats.get(i), mates.get(i));
-            }
+            mateScheduler.populate(room, now);
             // 입장 직후 WebSocket이 연결되지 않으면 유예 시간 뒤에 정리한다
             room.startGrace(scheduleExpiry(room));
         });
         roomRegistry.register(room);
-        log.debug("열람실 생성 roomId={}, guestId={}", room.getRoomId(), guestId);
+        log.debug("열람실 생성 roomId={}, guestId={}, seatCount={}", room.getRoomId(), guestId, seatCount);
         return room;
     }
 
@@ -171,7 +176,7 @@ public class RoomService {
                 .map(seat -> new SeatView(seat.getSeatNo(), seat.occupant().map(OccupantView::of).orElse(null)))
                 .toList();
         return messenger.event(RoomEventType.ROOM_SNAPSHOT, room.getRoomId(), null,
-                new SnapshotPayload(clock.instant(), room.getMySeatNo(), seats));
+                new SnapshotPayload(clock.instant(), room.getSeatCount(), room.getMySeatNo(), seats));
     }
 
     private void startGrace(Room room) {

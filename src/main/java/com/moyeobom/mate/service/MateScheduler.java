@@ -13,6 +13,7 @@ import com.moyeobom.room.dto.RoomDtos.StatePayload;
 import com.moyeobom.room.service.RoomMessenger;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -41,8 +42,23 @@ public class MateScheduler {
         this.clock = clock;
     }
 
-    public List<PlacedMate> createInitialMates(int count, Instant now) {
-        return mateFactory.createInitial(count, now);
+    /**
+     * 방 락을 잡은 상태에서 부른다. 무작위 수의 메이트를 무작위 자리에 앉히고,
+     * 남은 빈자리에는 시간차를 두고 새 메이트가 들어오도록 예약한다.
+     */
+    public void populate(Room room, Instant now) {
+        List<Seat> seats = new ArrayList<>(room.mateSeats());
+        mateFactory.shuffle(seats);
+        int count = mateFactory.initialMateCount(seats.size());
+        List<PlacedMate> mates = mateFactory.createInitial(count, now);
+        for (int i = 0; i < seats.size(); i++) {
+            Seat seat = seats.get(i);
+            if (i < count) {
+                seat(room, seat, mates.get(i));
+            } else {
+                scheduleRefill(room, seat, now.plus(mateFactory.arrivalDelay()));
+            }
+        }
     }
 
     /** 방 락을 잡은 상태에서 부른다. 메이트를 앉히고 첫 전이를 예약한다. */
@@ -80,9 +96,9 @@ public class MateScheduler {
     }
 
     private void finishFocus(Room room, Seat seat, Occupant mate, Instant now) {
-        // 과반 집중 규칙: 이 메이트가 쉬면 집중 인원이 기준보다 적어질 때는 휴식 대신 집중을 늘린다
+        // 과반 집중 규칙: 이 메이트가 쉬면 집중 인원이 앉은 사람의 과반보다 적어질 때는 휴식 대신 집중을 늘린다
         long focusingAfterBreak = room.focusingCount() - 1;
-        if (focusingAfterBreak < mateFactory.majorityFocusCount()) {
+        if (focusingAfterBreak < MateFactory.majorityOf(room.occupiedCount())) {
             scheduleTransition(room, seat, mate, now.plus(mateFactory.focusExtension()));
             return;
         }
@@ -101,14 +117,17 @@ public class MateScheduler {
         if (mateFactory.rollLeave()) {
             seat.leave();
             messenger.toRoom(room, RoomEventType.SEAT_LEFT, seat.getSeatNo(), null);
-            Instant refillAt = now.plus(mateFactory.refillDelay());
-            int seatNo = seat.getSeatNo();
-            seat.reserve(taskScheduler.schedule(() -> refill(room, seatNo), refillAt), refillAt);
+            scheduleRefill(room, seat, now.plus(mateFactory.refillDelay()));
             return;
         }
         mate.changeState(SeatState.FOCUS, now);
         messenger.toRoom(room, RoomEventType.STATE_CHANGED, seat.getSeatNo(), new StatePayload(SeatState.FOCUS, now));
         scheduleTransition(room, seat, mate, now.plus(mateFactory.focusDuration()));
+    }
+
+    private void scheduleRefill(Room room, Seat seat, Instant at) {
+        int seatNo = seat.getSeatNo();
+        seat.reserve(taskScheduler.schedule(() -> refill(room, seatNo), at), at);
     }
 
     private void scheduleTransition(Room room, Seat seat, Occupant mate, Instant at) {

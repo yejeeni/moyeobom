@@ -30,6 +30,18 @@ docker compose up -d        # MySQL 8.4
 5. 모든 동작(집중, 휴식, 완료 등)은 REST로 보내고, 화면 변화는 이벤트로 받는다. 경과 시간은 `since`와 스냅샷의 `serverTime`으로 클라이언트가 계산한다.
 6. 오늘 마무리를 누르면 집중 중일 때 `POST /focus/stop`(`STOPPED`)을 먼저 보내고 `GET /sprints/current/review`를 조회한다.
 
+## 프론트엔드 실행
+
+React + Vite + TypeScript. 개발 서버가 `/api`와 `/ws`를 백엔드(8080)로 넘겨 준다.
+
+```bash
+cd frontend
+npm install                 # 처음 한 번
+npm run dev                 # http://localhost:5173
+```
+
+화면: 첫 화면(`/`, 왼쪽 소개 + 오른쪽 스프린트 계획) → 열람실(`/room`) → 회고(`/review`). 창 폭이 760px 이하이면 컴팩트 모드로 바뀐다.
+
 ## 테스트
 
 ```bash

@@ -2,7 +2,10 @@ package com.moyeobom.room.dto;
 
 import com.moyeobom.room.domain.CharacterParts;
 import com.moyeobom.room.domain.Occupant;
+import com.moyeobom.room.domain.Room;
 import com.moyeobom.room.domain.SeatState;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import java.time.Instant;
 import java.util.List;
 
@@ -11,7 +14,13 @@ public final class RoomDtos {
     private RoomDtos() {
     }
 
-    public record RoomEnterResponse(String roomId, int seatNo, String nickname) {
+    /**
+     * @param seatCount 열람실 인원(나 포함 자리 수). 비우면 9명
+     */
+    public record RoomEnterRequest(@Min(1) @Max(Room.MAX_SEAT_COUNT) Integer seatCount) {
+    }
+
+    public record RoomEnterResponse(String roomId, int seatCount, int seatNo, String nickname) {
     }
 
     /**
@@ -44,7 +53,7 @@ public final class RoomDtos {
     public record SeatView(int seatNo, OccupantView occupant) {
     }
 
-    public record SnapshotPayload(Instant serverTime, int mySeatNo, List<SeatView> seats) {
+    public record SnapshotPayload(Instant serverTime, int seatCount, int mySeatNo, List<SeatView> seats) {
     }
 
     public record StatePayload(SeatState state, Instant since) {

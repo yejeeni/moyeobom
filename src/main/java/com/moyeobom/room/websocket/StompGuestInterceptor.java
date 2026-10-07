@@ -86,7 +86,7 @@ public class StompGuestInterceptor implements ExecutorChannelInterceptor {
         if (destination.startsWith(RoomMessenger.ROOM_TOPIC_PREFIX)) {
             String roomId = destination.substring(RoomMessenger.ROOM_TOPIC_PREFIX.length());
             boolean othersRoom = roomRegistry.findById(roomId)
-                    .map(room -> !room.getOwnerGuestId().equals(guestId))
+                    .map(room -> !room.hasMember(guestId))
                     .orElse(false);
             if (othersRoom) {
                 throw new MessageDeliveryException("ROOM_FORBIDDEN");

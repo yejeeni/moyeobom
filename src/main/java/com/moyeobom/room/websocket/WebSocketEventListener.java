@@ -37,7 +37,7 @@ public class WebSocketEventListener {
     }
 
     /**
-     * 게스트의 마지막 연결이 끊기면 진행 중인 세션을 마지막 신호 시각으로 닫고, 방은 유예 상태로 둔다.
+     * 게스트의 마지막 연결이 끊기면 진행 중인 세션을 마지막 신호 시각으로 닫고, 열람실 자리는 잠시 맡아 둔다.
      */
     @EventListener
     public void onDisconnected(SessionDisconnectEvent event) {

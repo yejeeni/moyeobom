@@ -46,6 +46,10 @@ public class ConnectionRegistry {
         return Optional.of(new Disconnection(guestId, lastSignal));
     }
 
+    public boolean isConnected(Long guestId) {
+        return sessionsByGuest.containsKey(guestId);
+    }
+
     public Set<Long> connectedGuestIds() {
         return Set.copyOf(sessionsByGuest.keySet());
     }

@@ -5,14 +5,21 @@ import type { Occupant, RoomEnter, RoomEvent, SnapshotPayload } from '../api/typ
 import { useToast } from '../components/Toasts'
 import { getGuestId } from '../lib/guest'
 import { isAlertSoundOn, playChime } from '../lib/preferences'
-import { DEFAULT_ROOM_SIZE, getRoomSize } from '../lib/roomSize'
+import { isApiError } from '../api/client'
+import { getRoomConfig, type RoomConfig } from '../lib/roomSize'
 
 export type Connection = 'idle' | 'connecting' | 'connected' | 'reconnecting'
 
 interface RoomState {
   roomId: string | null
+  /** 입장 코드 */
+  code: string | null
   /** 열람실 인원(자리 수) */
   seatCount: number
+  /** 실제 사람 자리 수(나 포함). 2 이상이면 코드를 나눠 줄 수 있다 */
+  realSeatCount: number
+  /** 비어 있는 실제 자리(초대 대기) */
+  waiting: Record<number, boolean>
   mySeatNo: number | null
   nickname: string | null
   seats: Record<number, Occupant | null>
@@ -24,14 +31,22 @@ interface RoomState {
 }
 
 interface RoomApi extends RoomState {
-  /** 인원을 주지 않으면 브라우저에 기억한 인원으로 들어간다. 인원이 바뀌면 새 방이 된다. */
-  enter: (seatCount?: number) => Promise<RoomEnter>
+  /** 내가 있는 방으로 다시 연결한다. 없으면 브라우저에 기억한 구성으로 새 방을 만든다 */
+  enter: () => Promise<RoomEnter>
+  /** 새 방을 만들어 옮긴다 */
+  create: (config: RoomConfig) => Promise<RoomEnter>
+  /** 코드로 다른 방에 들어간다 */
+  join: (code: string) => Promise<RoomEnter>
+  /** 이 화면의 연결만 정리한다(방에서 나오는 일은 서버가 마무리 확정 때 한다) */
   leave: () => void
 }
 
 const EMPTY: RoomState = {
   roomId: null,
-  seatCount: DEFAULT_ROOM_SIZE,
+  code: null,
+  seatCount: 9,
+  realSeatCount: 1,
+  waiting: {},
   mySeatNo: null,
   nickname: null,
   seats: {},
@@ -63,12 +78,18 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         case 'ROOM_SNAPSHOT': {
           const payload = event.payload as SnapshotPayload
           const seats: Record<number, Occupant | null> = {}
-          payload.seats.forEach((seat) => (seats[seat.seatNo] = seat.occupant))
+          const waiting: Record<number, boolean> = {}
+          payload.seats.forEach((seat) => {
+            seats[seat.seatNo] = seat.occupant
+            waiting[seat.seatNo] = seat.waiting
+          })
           seatsRef.current = seats
           mySeatRef.current = payload.mySeatNo
           setState((s) => ({
             ...s,
             seats,
+            waiting,
+            code: payload.code ?? s.code,
             seatCount: payload.seatCount ?? s.seatCount,
             mySeatNo: payload.mySeatNo,
             nickname: seats[payload.mySeatNo]?.nickname ?? s.nickname,
@@ -80,14 +101,16 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         case 'SEAT_JOINED': {
           const occupant = event.payload as Occupant
           seatsRef.current = { ...seatsRef.current, [seatNo]: occupant }
-          setState((s) => ({ ...s, seats: seatsRef.current }))
+          setState((s) => ({ ...s, seats: seatsRef.current, waiting: { ...s.waiting, [seatNo]: false } }))
           toast.show(`${occupant.nickname}님이 들어왔어요`)
           return
         }
         case 'SEAT_LEFT': {
           const left = seatsRef.current[seatNo]
+          // 실제 사람이 나가면 그 자리는 다시 초대 대기가 된다
+          const nowWaiting = Boolean((event.payload as { waiting?: boolean } | null)?.waiting)
           seatsRef.current = { ...seatsRef.current, [seatNo]: null }
-          setState((s) => ({ ...s, seats: seatsRef.current }))
+          setState((s) => ({ ...s, seats: seatsRef.current, waiting: { ...s.waiting, [seatNo]: nowWaiting } }))
           if (left) toast.show(`${left.nickname}님이 자리를 떠났어요`)
           return
         }
@@ -106,7 +129,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           return
         }
         case 'ROOM_NOT_FOUND':
-          // 서버가 재시작되어 방이 사라졌다. 다시 입장하면 새 방과 새 닉네임을 받는다.
+          // 서버가 재시작되어 방이 사라졌다(코드도 무효). 기억한 구성으로 새 방을 연다.
           enterRef.current().catch(() => {})
           return
       }
@@ -154,23 +177,48 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     client.activate()
   }, [subscribeAll])
 
-  const enter = useCallback(async (seatCount: number = getRoomSize()) => {
-    const entered = await api.enterRoom(seatCount)
-    const changed = roomIdRef.current !== entered.roomId
-    roomIdRef.current = entered.roomId
-    if (changed) seatsRef.current = {}
-    setState((s) => ({
-      ...s,
-      roomId: entered.roomId,
-      seatCount: entered.seatCount,
-      mySeatNo: entered.seatNo,
-      nickname: entered.nickname,
-      // 새 방이면 스냅샷이 올 때까지 이전 방 자리를 비운다
-      seats: changed ? {} : s.seats,
-    }))
-    connect()
-    return entered
-  }, [connect])
+  /** 들어간 방으로 화면 상태를 맞추고 구독을 다시 건다 */
+  const attach = useCallback(
+    (entered: RoomEnter) => {
+      const changed = roomIdRef.current !== entered.roomId
+      roomIdRef.current = entered.roomId
+      if (changed) seatsRef.current = {}
+      setState((s) => ({
+        ...s,
+        roomId: entered.roomId,
+        code: entered.code,
+        seatCount: entered.seatCount,
+        realSeatCount: entered.realSeatCount,
+        mySeatNo: entered.seatNo,
+        nickname: entered.nickname,
+        // 새 방이면 스냅샷이 올 때까지 이전 방 자리를 비운다
+        seats: changed ? {} : s.seats,
+        waiting: changed ? {} : s.waiting,
+      }))
+      connect()
+      return entered
+    },
+    [connect],
+  )
+
+  const create = useCallback(
+    async (config: RoomConfig) => attach(await api.createRoom(config.virtualSeats, config.realSeats)),
+    [attach],
+  )
+
+  const join = useCallback(async (code: string) => attach(await api.joinRoom(code)), [attach])
+
+  const enter = useCallback(async () => {
+    try {
+      return attach(await api.currentRoom())
+    } catch (e) {
+      if (!isApiError(e, 'ROOM_NOT_FOUND')) throw e
+      const hadRoom = roomIdRef.current !== null
+      const created = await create(getRoomConfig())
+      if (hadRoom) toast.show('열람실이 닫혀 새 열람실을 열었어요')
+      return created
+    }
+  }, [attach, create, toast])
 
   useEffect(() => {
     enterRef.current = enter
@@ -188,7 +236,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => void clientRef.current?.deactivate(), [])
 
-  const value = useMemo(() => ({ ...state, enter, leave }), [state, enter, leave])
+  const value = useMemo(() => ({ ...state, enter, create, join, leave }), [state, enter, create, join, leave])
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>
 }
 

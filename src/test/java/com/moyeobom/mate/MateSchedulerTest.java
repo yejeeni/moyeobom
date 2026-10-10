@@ -62,7 +62,7 @@ class MateSchedulerTest {
 
     @Test
     void 처음_입장하면_메이트_4에서_8명이_이미_공부하던_중이고_나머지_자리는_나중에_채워진다() {
-        List<Occupant> mates = room.mateSeats().stream().flatMap(seat -> seat.occupant().stream()).toList();
+        List<Occupant> mates = room.virtualSeats().stream().flatMap(seat -> seat.occupant().stream()).toList();
 
         assertThat(mates).hasSizeBetween(4, 8).allMatch(Occupant::isVirtual);
         // 아직 대기 중인 나까지 포함해 앉은 사람의 과반이 집중 중이다
@@ -72,7 +72,7 @@ class MateSchedulerTest {
             assertThat(mate.getCompletedCount()).isBetween(0, 3);
             assertThat(mate.getRemainingCount()).isBetween(1, 4);
         });
-        for (Seat seat : room.mateSeats()) {
+        for (Seat seat : room.virtualSeats()) {
             assertThat(seat.getScheduledAt()).isAfter(START);
             if (seat.isEmpty()) {
                 assertThat(Duration.between(START, seat.getScheduledAt()))
@@ -109,7 +109,7 @@ class MateSchedulerTest {
             mateScheduler = newMateScheduler(seed);
             sparse = createRoom();
         }
-        Seat empty = sparse.mateSeats().stream().filter(Seat::isEmpty).findFirst().orElseThrow();
+        Seat empty = sparse.virtualSeats().stream().filter(Seat::isEmpty).findFirst().orElseThrow();
         Instant arrivalAt = empty.getScheduledAt();
 
         while (empty.isEmpty() && scheduler.runNext(START.plus(Duration.ofMinutes(15)))) {
@@ -129,7 +129,7 @@ class MateSchedulerTest {
         while (scheduler.runNext(end)) {
             transitions++;
             assertThat(room.focusingCount()).isGreaterThanOrEqualTo(MateFactory.majorityOf(room.occupiedCount()));
-            for (Seat seat : room.mateSeats()) {
+            for (Seat seat : room.virtualSeats()) {
                 assertScheduledWithinRange(seat);
             }
         }
@@ -144,7 +144,7 @@ class MateSchedulerTest {
         Instant end = START.plus(Duration.ofHours(24));
         Seat leftSeat = null;
         while (leftSeat == null) {
-            List<Seat> occupiedBefore = room.mateSeats().stream().filter(seat -> !seat.isEmpty()).toList();
+            List<Seat> occupiedBefore = room.virtualSeats().stream().filter(seat -> !seat.isEmpty()).toList();
             if (!scheduler.runNext(end)) {
                 break;
             }
@@ -168,9 +168,9 @@ class MateSchedulerTest {
     @Test
     void 쉬면_집중_인원이_과반보다_적어질_때는_휴식_대신_집중을_연장한다() {
         // 9명 중 나와 메이트 4명만 집중 중이고 나머지는 휴식 중인 방
-        Room full = new Room("r-full", 2L, 1);
-        full.mySeat().sit(occupant(OccupantKind.REAL, SeatState.FOCUS));
-        List<Seat> mates = full.mateSeats();
+        Room full = Room.solo("r-full", Room.MAX_SEAT_COUNT, 1);
+        full.seat(1).sit(occupant(OccupantKind.REAL, SeatState.FOCUS));
+        List<Seat> mates = full.virtualSeats();
         for (int i = 0; i < mates.size(); i++) {
             SeatState state = i < 4 ? SeatState.FOCUS : SeatState.BREAK;
             Instant next = state == SeatState.FOCUS ? START.plus(Duration.ofMinutes(1)) : START.plus(Duration.ofHours(10));
@@ -191,9 +191,9 @@ class MateSchedulerTest {
     void 사람이_적은_방은_과반_기준도_낮아진다() {
         // 나(대기)와 집중 중인 메이트 4명, 5명짜리 방. 과반은 3명이다.
         // 첫 메이트는 쉬어도 3명이 집중하므로 쉴 수 있다
-        Room small = new Room("r-small", 3L, 1);
-        small.mySeat().sit(occupant(OccupantKind.REAL, SeatState.IDLE));
-        List<Seat> mates = small.mateSeats();
+        Room small = Room.solo("r-small", Room.MAX_SEAT_COUNT, 1);
+        small.seat(1).sit(occupant(OccupantKind.REAL, SeatState.IDLE));
+        List<Seat> mates = small.virtualSeats();
         for (int i = 0; i < 4; i++) {
             mateScheduler.seat(small, mates.get(i),
                     new PlacedMate(occupant(OccupantKind.VIRTUAL, SeatState.FOCUS), START.plus(Duration.ofMinutes(1 + i))));
@@ -221,8 +221,8 @@ class MateSchedulerTest {
     }
 
     private Room createRoom() {
-        Room created = new Room("r-test", 1L, 5);
-        created.mySeat().sit(occupant(OccupantKind.REAL, SeatState.IDLE));
+        Room created = Room.solo("r-test", Room.MAX_SEAT_COUNT, 5);
+        created.seat(5).sit(occupant(OccupantKind.REAL, SeatState.IDLE));
         mateScheduler.populate(created, START);
         return created;
     }

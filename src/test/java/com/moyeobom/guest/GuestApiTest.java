@@ -35,6 +35,17 @@ class GuestApiTest extends IntegrationTestSupport {
     }
 
     @Test
+    void 없는_주소는_404_허용하지_않는_방식은_405() throws Exception {
+        String guestId = issueGuest();
+        mockMvc.perform(get("/api/v1/nowhere").header("X-Guest-Id", guestId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+        mockMvc.perform(patch("/api/v1/guests/me").header("X-Guest-Id", guestId))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"));
+    }
+
+    @Test
     void 휴식_알림은_기본으로_꺼져_있고_보낸_항목만_바뀐다() throws Exception {
         String guestId = issueGuest();
 

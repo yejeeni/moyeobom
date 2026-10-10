@@ -29,6 +29,8 @@ import org.springframework.messaging.simp.stomp.StompFrameHandler;
 import org.springframework.messaging.simp.stomp.StompHeaders;
 import org.springframework.messaging.simp.stomp.StompSession;
 import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.ResultMatcher;
 import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
@@ -57,62 +59,122 @@ class RoomWebSocketTest extends IntegrationTestSupport {
     }
 
     @Test
-    void 할_일이_없으면_입장할_수_없고_같은_방에_다시_들어오면_같은_자리다() throws Exception {
-        mockMvc.perform(post("/api/v1/rooms/enter").header("X-Guest-Id", guest))
+    void 할_일이_없으면_열람실을_만들_수_없다() throws Exception {
+        create(guest, 8, 1)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("NO_TASK_FOR_ROOM"));
-
-        startSprint();
-        Map<String, Object> first = enter();
-        Map<String, Object> second = enter();
-
-        assertThat(second).isEqualTo(first);
     }
 
     @Test
-    void 구독하면_스냅샷을_받고_내_상태_변화가_내_자리에_전달된다() throws Exception {
-        long taskId = startSprint();
-        Map<String, Object> entered = enter();
-        String roomId = (String) entered.get("roomId");
-        int mySeat = (Integer) entered.get("seatNo");
+    void 가상_자리와_실제_자리를_정해_만들면_코드를_받고_내_자리에_앉는다() throws Exception {
+        startSprint(guest);
+        Map<String, Object> room = created(guest, 5, 3);
+
+        assertThat(room.get("seatCount")).isEqualTo(8);
+        assertThat(room.get("realSeatCount")).isEqualTo(3);
+        assertThat((String) room.get("code")).matches("[A-HJKMNP-Z2-9]{6}");
+        assertThat(current(guest).get("roomId")).isEqualTo(room.get("roomId"));
 
         StompSession session = connect(guest);
-        BlockingQueue<Map<String, Object>> topic = subscribe(session, "/topic/rooms/" + roomId);
-        BlockingQueue<Map<String, Object>> snapshots = subscribe(session, "/user/queue/room-snapshot");
-
-        Map<String, Object> snapshot = poll(snapshots, event -> true);
-        assertThat(snapshot.get("type")).isEqualTo("ROOM_SNAPSHOT");
-        assertThat((Integer) JsonPath.read(snapshot, "$.payload.mySeatNo")).isEqualTo(mySeat);
+        Map<String, Object> snapshot = poll(subscribe(session, "/user/queue/room-snapshot"), e -> true);
+        assertThat((String) JsonPath.read(snapshot, "$.payload.code")).isEqualTo(room.get("code"));
+        assertThat((Integer) JsonPath.read(snapshot, "$.payload.mySeatNo")).isEqualTo(room.get("seatNo"));
+        // 나를 뺀 실제 자리 2개는 '초대 대기'로 비어 있다
+        List<Boolean> waiting = JsonPath.read(snapshot, "$.payload.seats[*].waiting");
+        assertThat(waiting.stream().filter(Boolean::booleanValue).count()).isEqualTo(2);
         List<Object> occupants = JsonPath.read(snapshot, "$.payload.seats[*].occupant");
-        assertThat(occupants).hasSize(9);
-        // 나 포함 5~9명이 앉아 있고, 나머지는 빈자리(null)다
-        assertThat(occupants.stream().filter(Objects::nonNull).count()).isBetween(5L, 9L);
-        assertThat((String) JsonPath.read(snapshot, "$.payload.seats[" + (mySeat - 1) + "].occupant.nickname"))
-                .isEqualTo(entered.get("nickname"));
-        assertThat((String) JsonPath.read(snapshot, "$.payload.seats[" + (mySeat - 1) + "].occupant.state"))
-                .isEqualTo("IDLE");
+        assertThat(occupants.stream().filter(Objects::nonNull).count()).isBetween(2L, 6L);
         assertThat(snapshot.toString()).doesNotContain("VIRTUAL", "REAL");
+    }
 
-        mockMvc.perform(post("/api/v1/tasks/" + taskId + "/focus").header("X-Guest-Id", guest))
+    @Test
+    void 합계가_9명을_넘거나_실제_자리가_없으면_만들_수_없다() throws Exception {
+        startSprint(guest);
+        create(guest, 8, 2).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        create(guest, 3, 0).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void 코드로_들어온_사람이_실제_자리에_앉고_서로의_상태를_본다() throws Exception {
+        startSprint(guest);
+        Map<String, Object> room = created(guest, 2, 2);
+        String code = (String) room.get("code");
+        StompSession hostSession = connect(guest);
+        BlockingQueue<Map<String, Object>> hostTopic = subscribe(hostSession, "/topic/rooms/" + room.get("roomId"));
+
+        String friend = issueGuest();
+        long friendTask = startSprint(friend);
+        mockMvc.perform(get("/api/v1/rooms/lookup").header("X-Guest-Id", friend).param("code", code.toLowerCase()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.waitingSeatCount").value(1));
+        Map<String, Object> joined = join(friend, code.toLowerCase().replaceAll("(...)", "$1-"))
+                .andExpect(status().isOk()).andReturnMap();
+        assertThat(joined.get("roomId")).isEqualTo(room.get("roomId"));
+
+        Map<String, Object> seatJoined = poll(hostTopic, e -> "SEAT_JOINED".equals(e.get("type")));
+        assertThat(seatJoined.get("seatNo")).isEqualTo(joined.get("seatNo"));
+        assertThat((String) JsonPath.read(seatJoined, "$.payload.nickname")).isEqualTo(joined.get("nickname"));
+
+        StompSession friendSession = connect(friend);
+        subscribe(friendSession, "/topic/rooms/" + room.get("roomId"));
+        mockMvc.perform(post("/api/v1/tasks/" + friendTask + "/focus").header("X-Guest-Id", friend))
                 .andExpect(status().isOk());
-
-        Map<String, Object> changed = poll(topic,
-                event -> "STATE_CHANGED".equals(event.get("type")) && Integer.valueOf(mySeat).equals(event.get("seatNo")));
+        Map<String, Object> changed = poll(hostTopic,
+                e -> "STATE_CHANGED".equals(e.get("type")) && joined.get("seatNo").equals(e.get("seatNo")));
         assertThat((String) JsonPath.read(changed, "$.payload.state")).isEqualTo("FOCUS");
-        assertThat((String) JsonPath.read(changed, "$.payload.since")).isEqualTo("2026-10-05T00:00:00Z");
 
-        mockMvc.perform(post("/api/v1/sprints/current/tasks").header("X-Guest-Id", guest)
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"title\": \"추가\"}"))
-                .andExpect(status().isCreated());
+        // 실제 자리가 다 찼다
+        String third = issueGuest();
+        startSprint(third);
+        join(third, code).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ROOM_FULL"));
+    }
 
-        Map<String, Object> counts = poll(topic, event -> "COUNTS_CHANGED".equals(event.get("type")));
-        assertThat((Integer) JsonPath.read(counts, "$.payload.remainingCount")).isEqualTo(2);
+    @Test
+    void 없는_코드는_404() throws Exception {
+        startSprint(guest);
+        join(guest, "ZZZZZZ").andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("ROOM_NOT_FOUND"));
+        mockMvc.perform(get("/api/v1/rooms/current").header("X-Guest-Id", guest))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void 나가면_자리가_다시_초대_대기가_되고_모두_나가면_코드도_사라진다() throws Exception {
+        startSprint(guest);
+        Map<String, Object> room = created(guest, 0, 2);
+        String code = (String) room.get("code");
+        StompSession hostSession = connect(guest);
+        BlockingQueue<Map<String, Object>> hostTopic = subscribe(hostSession, "/topic/rooms/" + room.get("roomId"));
+
+        String friend = issueGuest();
+        startSprint(friend);
+        Map<String, Object> joined = join(friend, code).andReturnMap();
+        mockMvc.perform(post("/api/v1/rooms/leave").header("X-Guest-Id", friend)).andExpect(status().isNoContent());
+
+        Map<String, Object> left = poll(hostTopic, e -> "SEAT_LEFT".equals(e.get("type")));
+        assertThat(left.get("seatNo")).isEqualTo(joined.get("seatNo"));
+        mockMvc.perform(get("/api/v1/rooms/lookup").header("X-Guest-Id", guest).param("code", code))
+                .andExpect(jsonPath("$.waitingSeatCount").value(1));
+
+        mockMvc.perform(post("/api/v1/rooms/leave").header("X-Guest-Id", guest)).andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/v1/rooms/lookup").header("X-Guest-Id", guest).param("code", code))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void 다른_방을_만들면_이전_방에서_나온다() throws Exception {
+        startSprint(guest);
+        Map<String, Object> first = created(guest, 3, 1);
+        Map<String, Object> second = created(guest, 1, 1);
+
+        assertThat(second.get("roomId")).isNotEqualTo(first.get("roomId"));
+        mockMvc.perform(get("/api/v1/rooms/lookup").header("X-Guest-Id", guest).param("code", (String) first.get("code")))
+                .andExpect(status().isNotFound());
     }
 
     @Test
     void 연결이_끊기면_집중_세션이_닫히고_다시_연결하면_같은_방_스냅샷을_받는다() throws Exception {
-        long taskId = startSprint();
-        String roomId = (String) enter().get("roomId");
+        long taskId = startSprint(guest);
+        String roomId = (String) created(guest, 8, 1).get("roomId");
         StompSession session = connect(guest);
         subscribe(session, "/topic/rooms/" + roomId);
         mockMvc.perform(post("/api/v1/tasks/" + taskId + "/focus").header("X-Guest-Id", guest));
@@ -122,48 +184,21 @@ class RoomWebSocketTest extends IntegrationTestSupport {
         waitUntil(() -> stateOf(guest).equals("IDLE"));
 
         StompSession again = connect(guest);
-        BlockingQueue<Map<String, Object>> snapshots = subscribe(again, "/user/queue/room-snapshot");
-        Map<String, Object> snapshot = poll(snapshots, event -> true);
+        Map<String, Object> snapshot = poll(subscribe(again, "/user/queue/room-snapshot"), e -> true);
         assertThat(snapshot.get("roomId")).isEqualTo(roomId);
     }
 
     @Test
-    void 모르는_게스트는_연결할_수_없다() {
-        assertThatThrownBy(() -> connect("3f1c2a8e-0000-4000-8000-000000000000"))
-                .isInstanceOf(Exception.class);
-    }
+    void 다른_사람의_열람실은_구독할_수_없고_모르는_게스트는_연결할_수_없다() throws Exception {
+        startSprint(guest);
+        String roomId = (String) created(guest, 8, 1).get("roomId");
+        String stranger = issueGuest();
+        StompSession session = connect(stranger);
+        BlockingQueue<Map<String, Object>> topic = subscribe(session, "/topic/rooms/" + roomId);
+        waitUntil(() -> !session.isConnected());
+        assertThat(topic).isEmpty();
 
-    @Test
-    void 인원을_고르면_그_수만큼_자리가_생기고_다른_인원으로_들어오면_새_방이_된다() throws Exception {
-        startSprint();
-        Map<String, Object> small = enter("{\"seatCount\": 3}");
-        assertThat(small.get("seatCount")).isEqualTo(3);
-        assertThat((Integer) small.get("seatNo")).isBetween(1, 3);
-
-        StompSession session = connect(guest);
-        BlockingQueue<Map<String, Object>> snapshots = subscribe(session, "/user/queue/room-snapshot");
-        Map<String, Object> snapshot = poll(snapshots, event -> true);
-        assertThat((Integer) JsonPath.read(snapshot, "$.payload.seatCount")).isEqualTo(3);
-        assertThat((List<?>) JsonPath.read(snapshot, "$.payload.seats")).hasSize(3);
-
-        // 같은 인원이면 같은 방, 다른 인원이면 새 방
-        assertThat(enter("{\"seatCount\": 3}").get("roomId")).isEqualTo(small.get("roomId"));
-        Map<String, Object> solo = enter("{\"seatCount\": 1}");
-        assertThat(solo.get("roomId")).isNotEqualTo(small.get("roomId"));
-        assertThat(solo.get("seatNo")).isEqualTo(1);
-        // 인원을 보내지 않으면 9명
-        assertThat(enter().get("seatCount")).isEqualTo(9);
-    }
-
-    @Test
-    void 인원은_1에서_9명까지만_고를_수_있다() throws Exception {
-        startSprint();
-        for (String body : new String[]{"{\"seatCount\": 0}", "{\"seatCount\": 10}"}) {
-            mockMvc.perform(post("/api/v1/rooms/enter").header("X-Guest-Id", guest)
-                            .contentType(MediaType.APPLICATION_JSON).content(body))
-                    .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
-        }
+        assertThatThrownBy(() -> connect("3f1c2a8e-0000-4000-8000-000000000000")).isInstanceOf(Exception.class);
     }
 
     @Test
@@ -174,27 +209,32 @@ class RoomWebSocketTest extends IntegrationTestSupport {
         assertThat(poll(snapshots, event -> true).get("type")).isEqualTo("ROOM_NOT_FOUND");
     }
 
-    private long startSprint() throws Exception {
-        String body = mockMvc.perform(post("/api/v1/sprints").header("X-Guest-Id", guest)
+    private long startSprint(String guestId) throws Exception {
+        String body = mockMvc.perform(post("/api/v1/sprints").header("X-Guest-Id", guestId)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"tasks\": [{\"title\": \"알고리즘\"}]}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(body, "$.sprint.tasks[0].taskId")).longValue();
     }
 
-    private Map<String, Object> enter() throws Exception {
-        String body = mockMvc.perform(post("/api/v1/rooms/enter").header("X-Guest-Id", guest))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-        return JsonPath.read(body, "$");
+    private Result create(String guestId, int virtualSeats, int realSeats) throws Exception {
+        return new Result(mockMvc.perform(post("/api/v1/rooms").header("X-Guest-Id", guestId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"virtualSeats\": %d, \"realSeats\": %d}".formatted(virtualSeats, realSeats))));
     }
 
-    private Map<String, Object> enter(String json) throws Exception {
-        String body = mockMvc.perform(post("/api/v1/rooms/enter").header("X-Guest-Id", guest)
-                        .contentType(MediaType.APPLICATION_JSON).content(json))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-        return JsonPath.read(body, "$");
+    private Map<String, Object> created(String guestId, int virtualSeats, int realSeats) throws Exception {
+        return create(guestId, virtualSeats, realSeats).andExpect(status().isCreated()).andReturnMap();
+    }
+
+    private Result join(String guestId, String code) throws Exception {
+        return new Result(mockMvc.perform(post("/api/v1/rooms/join").header("X-Guest-Id", guestId)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"code\": \"" + code + "\"}")));
+    }
+
+    private Map<String, Object> current(String guestId) throws Exception {
+        return new Result(mockMvc.perform(get("/api/v1/rooms/current").header("X-Guest-Id", guestId)))
+                .andExpect(status().isOk()).andReturnMap();
     }
 
     private String stateOf(String guestId) throws Exception {
@@ -254,5 +294,18 @@ class RoomWebSocketTest extends IntegrationTestSupport {
     @FunctionalInterface
     private interface ThrowingSupplier {
         boolean get() throws Exception;
+    }
+
+    /** 응답 검사와 본문 꺼내기를 이어 쓰기 위한 작은 도우미 */
+    private record Result(ResultActions actions) {
+
+        Result andExpect(ResultMatcher matcher) throws Exception {
+            actions.andExpect(matcher);
+            return this;
+        }
+
+        Map<String, Object> andReturnMap() throws Exception {
+            return JsonPath.read(actions.andReturn().getResponse().getContentAsString(), "$");
+        }
     }
 }

@@ -1,28 +1,39 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import { isAlertSoundOn, playChime, setAlertSound } from '../lib/preferences'
+import type { RoomConfig } from '../lib/roomSize'
 import { Icon } from './Icon'
 import { Modal } from './Modal'
+import { RoomChoice, type CodeStatus, type RoomChoiceValue } from './RoomChoice'
 import { useToast } from './Toasts'
 
 interface Props {
   onClose: () => void
   /** 있으면 '내 캐릭터' 항목을 보여 준다 */
   onOpenCharacters?: () => void
-  /** 지금 열람실 인원. 있으면 인원 항목을 보여 준다 */
-  roomSize?: number
-  /** 인원을 바꿔 저장하면 부른다(새 방으로 들어간다) */
-  onRoomSizeChange?: (size: number) => Promise<void>
+  /** 지금 열람실 구성. 있으면 열람실 항목(새로 만들기·코드로 입장)을 보여 준다 */
+  roomConfig?: RoomConfig
+  /** 다른 구성으로 바꾸거나 코드를 넣고 저장하면 부른다 */
+  onRoomChange?: (choice: RoomChoiceValue) => Promise<void>
 }
 
-export function SettingsModal({ onClose, onOpenCharacters, roomSize, onRoomSizeChange }: Props) {
+export function SettingsModal({ onClose, onOpenCharacters, roomConfig, onRoomChange }: Props) {
   const toast = useToast()
   const [enabled, setEnabled] = useState(false)
   const [minutes, setMinutes] = useState('50')
   const [sound, setSound] = useState(isAlertSoundOn())
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [size, setSize] = useState(roomSize ?? 9)
+  const [roomChoice, setRoomChoice] = useState<RoomChoiceValue | null>(roomConfig ? { mode: 'create', config: roomConfig } : null)
+  const [codeStatus, setCodeStatus] = useState<CodeStatus>({ kind: 'empty' })
+  const onCodeStatus = useCallback((status: CodeStatus) => setCodeStatus(status), [])
+  const roomChanged =
+    roomChoice !== null &&
+    roomConfig !== undefined &&
+    (roomChoice.mode === 'join'
+      ? roomChoice.code.length > 0
+      : roomChoice.config.virtualSeats !== roomConfig.virtualSeats || roomChoice.config.realSeats !== roomConfig.realSeats)
+  const roomReady = !roomChanged || roomChoice?.mode === 'create' || codeStatus.kind === 'ready'
 
   useEffect(() => {
     api.getSetting()
@@ -45,9 +56,8 @@ export function SettingsModal({ onClose, onOpenCharacters, roomSize, onRoomSizeC
     try {
       await api.updateSetting({ breakAlertEnabled: enabled, breakAlertMinutes: minutesValue })
       setAlertSound(sound)
-      if (roomSize !== undefined && size !== roomSize && onRoomSizeChange) {
-        await onRoomSizeChange(size)
-        toast.show(`${size}명 열람실로 옮겼어요`)
+      if (roomChanged && roomChoice && onRoomChange) {
+        await onRoomChange(roomChoice)
       } else {
         toast.show('설정을 저장했어요')
       }
@@ -122,28 +132,19 @@ export function SettingsModal({ onClose, onOpenCharacters, roomSize, onRoomSizeC
         </div>
       </div>
 
-      {roomSize !== undefined && (
+      {roomChoice && (
         <div className="setting-group">
           <div className="setting-row">
             <span className="setting-icon">
               <Icon name="users" size={18} />
             </span>
             <span className="setting-text">
-              <strong id="room-size-label">열람실 인원</strong>
-              <small>나를 포함한 자리 수예요. 바꾸면 새 열람실로 옮겨요</small>
+              <strong>열람실</strong>
+              <small>구성을 바꾸거나 코드를 넣고 저장하면 그 열람실로 옮겨요. 할 일과 기록은 그대로예요</small>
             </span>
-            <div className="stepper">
-              <button type="button" onClick={() => setSize((v) => Math.max(1, v - 1))} disabled={size <= 1} aria-label="한 명 줄이기">
-                <Icon name="minus" size={16} />
-              </button>
-              <output className="stepper-value" aria-labelledby="room-size-label">
-                {size}
-              </output>
-              <span className="stepper-unit">명</span>
-              <button type="button" onClick={() => setSize((v) => Math.min(9, v + 1))} disabled={size >= 9} aria-label="한 명 늘리기">
-                <Icon name="plus" size={16} />
-              </button>
-            </div>
+          </div>
+          <div className="setting-sub setting-room">
+            <RoomChoice value={roomChoice} onChange={setRoomChoice} onCodeStatus={onCodeStatus} />
           </div>
         </div>
       )}
@@ -169,7 +170,7 @@ export function SettingsModal({ onClose, onOpenCharacters, roomSize, onRoomSizeC
         <button className="button" onClick={onClose}>
           취소
         </button>
-        <button className="button primary" onClick={save} disabled={!loaded || !valid || saving}>
+        <button className="button primary" onClick={save} disabled={!loaded || !valid || saving || !roomReady}>
           {saving ? '저장 중…' : '저장'}
         </button>
       </div>

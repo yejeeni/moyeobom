@@ -28,6 +28,6 @@ public class RoomEventListener {
 
     @TransactionalEventListener(fallbackExecution = true)
     public void onSprintClosed(SprintClosedEvent event) {
-        roomService.closeRoomOf(event.guestId());
+        roomService.leave(event.guestId());
     }
 }

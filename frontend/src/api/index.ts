@@ -9,6 +9,7 @@ import type {
   NewTask,
   Review,
   RoomEnter,
+  RoomLookup,
   Setting,
   SprintView,
   Task,
@@ -36,7 +37,12 @@ export const api = {
   stopFocus: (reason: 'STOPPED' | 'BREAK') => request<MyStatus>('POST', '/focus/stop', { reason }),
   currentFocus: () => request<MyStatus>('GET', '/focus/current'),
 
-  enterRoom: (seatCount: number) => request<RoomEnter>('POST', '/rooms/enter', { seatCount }),
+  createRoom: (virtualSeats: number, realSeats: number) =>
+    request<RoomEnter>('POST', '/rooms', { virtualSeats, realSeats }),
+  joinRoom: (code: string) => request<RoomEnter>('POST', '/rooms/join', { code }),
+  lookupRoom: (code: string) => request<RoomLookup>('GET', `/rooms/lookup?code=${encodeURIComponent(code)}`),
+  currentRoom: () => request<RoomEnter>('GET', '/rooms/current'),
+  leaveRoom: () => request<void>('POST', '/rooms/leave'),
 
   review: () => request<Review>('GET', '/sprints/current/review'),
   closeSprint: (decisions: { taskId: number; action: CloseAction }[]) =>

@@ -47,7 +47,7 @@ public class MateScheduler {
      * 남은 빈자리에는 시간차를 두고 새 메이트가 들어오도록 예약한다.
      */
     public void populate(Room room, Instant now) {
-        List<Seat> seats = new ArrayList<>(room.mateSeats());
+        List<Seat> seats = new ArrayList<>(room.virtualSeats());
         mateFactory.shuffle(seats);
         int count = mateFactory.initialMateCount(seats.size());
         List<PlacedMate> mates = mateFactory.createInitial(count, now);

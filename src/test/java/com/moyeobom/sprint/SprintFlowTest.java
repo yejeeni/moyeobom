@@ -39,8 +39,8 @@ class SprintFlowTest extends IntegrationTestSupport {
         long algorithm = taskId(started, 0);
         long resume = taskId(started, 1);
         long english = taskId(started, 2);
-        String roomId = JsonPath.read(perform(post("/api/v1/rooms/enter"), guest, null)
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$.roomId");
+        String roomId = JsonPath.read(perform(post("/api/v1/rooms"), guest, "{\"virtualSeats\": 8, \"realSeats\": 1}")
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.roomId");
 
         // 2. 집중: 알고리즘 110분(휴식 끼고 두 번), 자소서 10분 후 마무리
         perform(post("/api/v1/tasks/" + algorithm + "/focus"), guest, null);

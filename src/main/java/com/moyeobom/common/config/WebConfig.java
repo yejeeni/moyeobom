@@ -21,7 +21,8 @@ public class WebConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(guestAuthInterceptor)
                 .addPathPatterns("/api/v1/**")
-                .excludePathPatterns("/api/v1/guests");
+                // 게스트 발급과, 초대 링크로 온 사람이 게스트 발급 전에 코드를 확인하는 요청은 인증 없이 받는다
+                .excludePathPatterns("/api/v1/guests", "/api/v1/rooms/lookup");
     }
 
     @Override

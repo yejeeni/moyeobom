@@ -1,27 +1,56 @@
 import { useLayoutEffect, useState, type RefObject } from 'react'
 
-/** 열람실 인원(나 포함 1~9명). 브라우저에만 기억한다. */
-const KEY = 'moyeobom.roomSize'
-export const MIN_ROOM_SIZE = 1
-export const MAX_ROOM_SIZE = 9
-export const DEFAULT_ROOM_SIZE = 9
-
-export function getRoomSize(): number {
-  try {
-    const value = Number(localStorage.getItem(KEY))
-    return Number.isInteger(value) && value >= MIN_ROOM_SIZE && value <= MAX_ROOM_SIZE ? value : DEFAULT_ROOM_SIZE
-  } catch {
-    return DEFAULT_ROOM_SIZE
-  }
+/**
+ * 새 열람실 구성(가상 메이트 자리 + 실제 사람 자리). 합계 1~9명이며 브라우저에만 기억한다.
+ * 실제 자리가 2개 이상이면 입장 코드로 다른 사람이 들어올 수 있다.
+ */
+export interface RoomConfig {
+  virtualSeats: number
+  realSeats: number
 }
 
-export function setRoomSize(size: number) {
+const CONFIG_KEY = 'moyeobom.roomConfig'
+const LEGACY_SIZE_KEY = 'moyeobom.roomSize'
+export const MAX_ROOM_SIZE = 9
+export const DEFAULT_ROOM_CONFIG: RoomConfig = { virtualSeats: 8, realSeats: 1 }
+
+export function isValidConfig({ virtualSeats, realSeats }: RoomConfig): boolean {
+  return (
+    Number.isInteger(virtualSeats) &&
+    Number.isInteger(realSeats) &&
+    virtualSeats >= 0 &&
+    realSeats >= 1 &&
+    virtualSeats + realSeats <= MAX_ROOM_SIZE
+  )
+}
+
+export function getRoomConfig(): RoomConfig {
   try {
-    localStorage.setItem(KEY, String(size))
+    const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) ?? 'null') as RoomConfig | null
+    if (saved && isValidConfig(saved)) return saved
+    // 예전에 고른 인원(나 포함 n명)은 '가상 n-1 + 실제 1'로 옮긴다
+    const legacy = Number(localStorage.getItem(LEGACY_SIZE_KEY))
+    if (Number.isInteger(legacy) && legacy >= 1 && legacy <= MAX_ROOM_SIZE) return { virtualSeats: legacy - 1, realSeats: 1 }
+  } catch {
+    // 읽을 수 없으면 기본값
+  }
+  return DEFAULT_ROOM_CONFIG
+}
+
+export function setRoomConfig(config: RoomConfig) {
+  try {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(config))
   } catch {
     // 저장할 수 없으면 이번 화면에서만 쓴다
   }
 }
+
+/** 입력한 코드를 비교할 수 있게 다듬는다(서버와 같은 규칙): 영문·숫자만 남기고 대문자로 */
+export function normalizeCode(input: string): string {
+  return input.replace(/[^0-9A-Za-z]/g, '').toUpperCase()
+}
+
+export const CODE_LENGTH = 6
 
 /** 칸 비율(가로:세로). 배경 그림 비율에 맞춘다. */
 const TILE_RATIO = 16 / 10

@@ -5,9 +5,11 @@ import com.moyeobom.room.dto.RoomDtos.RoomCreateRequest;
 import com.moyeobom.room.dto.RoomDtos.RoomEnterResponse;
 import com.moyeobom.room.dto.RoomDtos.RoomJoinRequest;
 import com.moyeobom.room.dto.RoomDtos.RoomLookupResponse;
+import com.moyeobom.room.service.CodeAttemptLimiter;
 import com.moyeobom.room.service.RoomService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class RoomController {
 
     private final RoomService roomService;
+    private final CodeAttemptLimiter codeAttemptLimiter;
 
     @Operation(summary = "열람실 만들기", description = """
             가상 메이트 자리(0~8)와 실제 사람 자리(나 포함 1~9)를 정해 새 열람실을 만들고 들어간다. 합계는 9명까지.
@@ -39,16 +42,23 @@ public class RoomController {
         return roomService.create(guestId, request.virtualSeats(), request.realSeats());
     }
 
-    @Operation(summary = "코드로 들어가기", description = "코드가 없으면 404 ROOM_NOT_FOUND, 실제 자리가 다 찼으면 409 ROOM_FULL")
+    @Operation(summary = "코드로 들어가기", description = """
+            코드가 없으면 404 ROOM_NOT_FOUND, 실제 자리가 다 찼으면 409 ROOM_FULL.
+            같은 곳에서 없는 코드를 여러 번 넣으면 잠시 429 TOO_MANY_CODE_ATTEMPTS
+            """)
     @PostMapping("/join")
-    public RoomEnterResponse join(@CurrentGuest Long guestId, @Valid @RequestBody RoomJoinRequest request) {
-        return roomService.join(guestId, request.code());
+    public RoomEnterResponse join(@CurrentGuest Long guestId, @Valid @RequestBody RoomJoinRequest request,
+                                  HttpServletRequest http) {
+        return codeAttemptLimiter.attempt(http.getRemoteAddr(), () -> roomService.join(guestId, request.code()));
     }
 
-    @Operation(summary = "코드 확인", description = "들어가기 전에 방이 있는지, 남은 실제 자리가 몇 개인지 본다")
+    @Operation(summary = "코드 확인", description = """
+            들어가기 전에 방이 있는지, 남은 실제 자리가 몇 개인지 본다.
+            없는 코드를 여러 번 넣으면 들어가기와 함께 429 TOO_MANY_CODE_ATTEMPTS
+            """)
     @GetMapping("/lookup")
-    public RoomLookupResponse lookup(@RequestParam String code) {
-        return roomService.lookup(code);
+    public RoomLookupResponse lookup(@RequestParam String code, HttpServletRequest http) {
+        return codeAttemptLimiter.attempt(http.getRemoteAddr(), () -> roomService.lookup(code));
     }
 
     @Operation(summary = "내가 있는 열람실", description = "없으면 404 ROOM_NOT_FOUND(서버 재시작 등). 그때는 새로 만들거나 코드로 들어간다")

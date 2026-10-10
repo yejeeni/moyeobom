@@ -161,6 +161,39 @@ class RoomWebSocketTest extends IntegrationTestSupport {
     }
 
     @Test
+    void 나간_방의_알림은_구독을_남겨_두어도_받지_않는다() throws Exception {
+        startSprint(guest);
+        Map<String, Object> room = created(guest, 0, 3);
+        String code = (String) room.get("code");
+        String topicPath = "/topic/rooms/" + room.get("roomId");
+        BlockingQueue<Map<String, Object>> hostTopic = subscribe(connect(guest), topicPath);
+
+        String friend = issueGuest();
+        startSprint(friend);
+        join(friend, code).andExpect(status().isOk());
+        BlockingQueue<Map<String, Object>> friendTopic = subscribe(connect(friend), topicPath);
+
+        // 친구의 구독이 브로커에 등록됐는지 다음 입장 알림으로 확인한다
+        String third = issueGuest();
+        startSprint(third);
+        Map<String, Object> thirdJoined = join(third, code).andReturnMap();
+        poll(friendTopic, e -> "SEAT_JOINED".equals(e.get("type")) && thirdJoined.get("seatNo").equals(e.get("seatNo")));
+
+        // 친구는 나가지만 클라이언트가 구독을 끊지 않고 남겨 둔다
+        mockMvc.perform(post("/api/v1/rooms/leave").header("X-Guest-Id", friend)).andExpect(status().isNoContent());
+        poll(hostTopic, e -> "SEAT_LEFT".equals(e.get("type")));
+        friendTopic.clear();
+
+        String fourth = issueGuest();
+        startSprint(fourth);
+        Map<String, Object> fourthJoined = join(fourth, code).andReturnMap();
+        poll(hostTopic, e -> "SEAT_JOINED".equals(e.get("type")) && fourthJoined.get("seatNo").equals(e.get("seatNo")));
+
+        Thread.sleep(300);
+        assertThat(friendTopic).isEmpty();
+    }
+
+    @Test
     void 다른_방을_만들면_이전_방에서_나온다() throws Exception {
         startSprint(guest);
         Map<String, Object> first = created(guest, 3, 1);

@@ -92,6 +92,10 @@ public class RoomService {
         Occupant me = newMember(guestId);
         Room room;
         synchronized (this) {
+            // 방마다 가상 메이트 예약 작업이 돌므로 서버 전체 방 수에 상한을 둔다. 이미 방에 있던 사람은 그 방을 바꾸는 것이라 막지 않는다
+            if (roomRegistry.roomCount() >= properties.maxRooms() && roomRegistry.findByGuestId(guestId).isEmpty()) {
+                throw new BusinessException(ErrorCode.ROOM_LIMIT_REACHED);
+            }
             leaveCurrent(guestId);
             room = Room.create(newRoomId(), newCode(), virtualSeats, realSeats, random);
             room.withLock(() -> {

@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import com.moyeobom.support.IntegrationTestSupport;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
@@ -59,6 +61,19 @@ class SprintTaskApiTest extends IntegrationTestSupport {
         startSprint(guest, TWO_TASKS)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SPRINT_ALREADY_OPEN"));
+    }
+
+    @Test
+    void 할_일은_스프린트마다_50개까지다() throws Exception {
+        String guest = issueGuest();
+
+        startSprint(guest, tasksJson(51)).andExpect(status().isBadRequest());
+
+        startSprint(guest, tasksJson(49)).andExpect(status().isCreated());
+        addTask(guest, "{\"title\": \"50번째\"}").andExpect(status().isCreated());
+        addTask(guest, "{\"title\": \"51번째\"}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TASK_LIMIT_EXCEEDED"));
     }
 
     @Test
@@ -140,6 +155,12 @@ class SprintTaskApiTest extends IntegrationTestSupport {
         mockMvc.perform(post("/api/v1/tasks/" + taskId + "/complete").header("X-Guest-Id", guest))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("TASK_ALREADY_DONE"));
+    }
+
+    private static String tasksJson(int count) {
+        return IntStream.rangeClosed(1, count)
+                .mapToObj(i -> "{\"title\": \"할 일 " + i + "\"}")
+                .collect(Collectors.joining(",", "{\"tasks\": [", "]}"));
     }
 
     private ResultActions startSprint(String guest, String json) throws Exception {

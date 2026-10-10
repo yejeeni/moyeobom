@@ -4,8 +4,13 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -32,6 +37,19 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleNotReadable(HttpMessageNotReadableException e) {
+        return ResponseEntity.status(ErrorCode.INVALID_INPUT.getStatus())
+                .body(ErrorResponse.of(ErrorCode.INVALID_INPUT, ErrorCode.INVALID_INPUT.getMessage()));
+    }
+
+    /** 숫자 자리에 글자, 빠진 파라미터·헤더, 잘못된 Content-Type처럼 요청 형식이 틀린 경우. 오류 로그를 남기지 않는다 */
+    @ExceptionHandler({
+            MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class,
+            MissingRequestHeaderException.class,
+            HandlerMethodValidationException.class,
+            HttpMediaTypeNotSupportedException.class
+    })
+    public ResponseEntity<ErrorResponse> handleBadRequest(Exception e) {
         return ResponseEntity.status(ErrorCode.INVALID_INPUT.getStatus())
                 .body(ErrorResponse.of(ErrorCode.INVALID_INPUT, ErrorCode.INVALID_INPUT.getMessage()));
     }

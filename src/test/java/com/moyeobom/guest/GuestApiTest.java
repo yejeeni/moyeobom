@@ -46,6 +46,23 @@ class GuestApiTest extends IntegrationTestSupport {
     }
 
     @Test
+    void 요청_형식이_틀리면_500이_아니라_400() throws Exception {
+        String guestId = issueGuest();
+        // 숫자 자리에 글자
+        mockMvc.perform(patch("/api/v1/tasks/abc").header("X-Guest-Id", guestId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        // 필수 파라미터 빠짐
+        mockMvc.perform(get("/api/v1/rooms/lookup"))
+                .andExpect(status().isBadRequest());
+        // JSON이 아닌 본문
+        mockMvc.perform(patch("/api/v1/guests/me/setting").header("X-Guest-Id", guestId)
+                        .contentType(MediaType.TEXT_PLAIN).content("x"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void 휴식_알림은_기본으로_꺼져_있고_보낸_항목만_바뀐다() throws Exception {
         String guestId = issueGuest();
 

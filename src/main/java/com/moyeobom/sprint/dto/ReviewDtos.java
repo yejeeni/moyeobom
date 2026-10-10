@@ -1,8 +1,10 @@
 package com.moyeobom.sprint.dto;
 
+import com.moyeobom.task.domain.Task;
 import com.moyeobom.task.domain.TaskStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 
 public final class ReviewDtos {
@@ -48,7 +50,7 @@ public final class ReviewDtos {
     /**
      * 미완료 할 일마다 이월 또는 닫기. 보내지 않은 할 일은 이월한다.
      */
-    public record SprintCloseRequest(List<@Valid Decision> decisions) {
+    public record SprintCloseRequest(@Size(max = Task.MAX_PER_SPRINT) List<@Valid Decision> decisions) {
 
         public SprintCloseRequest {
             decisions = decisions == null ? List.of() : decisions;

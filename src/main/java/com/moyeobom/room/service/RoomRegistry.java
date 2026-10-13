@@ -54,4 +54,8 @@ public class RoomRegistry {
     public boolean containsCode(String code) {
         return roomIdByCode.containsKey(code);
     }
+
+    public int roomCount() {
+        return rooms.size();
+    }
 }

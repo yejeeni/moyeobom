@@ -7,11 +7,13 @@ import com.moyeobom.guest.dto.GuestDtos.GuestCreateResponse;
 import com.moyeobom.guest.dto.GuestDtos.GuestMeResponse;
 import com.moyeobom.guest.dto.GuestDtos.SettingResponse;
 import com.moyeobom.guest.dto.GuestDtos.SettingUpdateRequest;
+import com.moyeobom.guest.service.GuestIssueLimiter;
 import com.moyeobom.guest.service.GuestService;
 import com.moyeobom.sprint.service.SprintQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -31,13 +33,18 @@ public class GuestController {
 
     private final GuestService guestService;
     private final SprintQueryService sprintQueryService;
+    private final GuestIssueLimiter guestIssueLimiter;
 
-    @Operation(summary = "게스트 발급", description = "받은 guestId를 브라우저에 저장하고 이후 요청의 X-Guest-Id 헤더로 보낸다")
+    @Operation(summary = "게스트 발급", description = """
+            받은 guestId를 브라우저에 저장하고 이후 요청의 X-Guest-Id 헤더로 보낸다.
+            같은 곳에서 짧은 시간에 너무 많이 받으면 429 TOO_MANY_GUESTS
+            """)
     @SecurityRequirements
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public GuestCreateResponse issue() {
-        return new GuestCreateResponse(guestService.issue().getPublicId());
+    public GuestCreateResponse issue(HttpServletRequest http) {
+        return guestIssueLimiter.attempt(http.getRemoteAddr(),
+                () -> new GuestCreateResponse(guestService.issue().getPublicId()));
     }
 
     @Operation(summary = "내 게스트 정보와 열린 스프린트 여부")

@@ -70,7 +70,11 @@ public class TaskService {
 
     @Transactional
     public TaskResponse add(Long guestId, TaskCreateRequest request) {
-        Sprint sprint = sprintQueryService.getOpenSprint(guestId);
+        // 스프린트 행을 잠가 동시에 추가해도 개수 상한을 넘지 않게 한다
+        Sprint sprint = sprintQueryService.lockOpenSprint(guestId);
+        if (taskRepository.countBySprintId(sprint.getId()) >= Task.MAX_PER_SPRINT) {
+            throw new BusinessException(ErrorCode.TASK_LIMIT_EXCEEDED);
+        }
         int sortOrder = taskRepository.findMaxSortOrder(sprint.getId()) + 1;
         Task task = taskRepository.saveAndFlush(Task.create(sprint.getId(), request.title(), request.estimatedMinutes(),
                 sortOrder, Times.now(clock)));

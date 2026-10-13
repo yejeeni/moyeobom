@@ -23,7 +23,7 @@ class CodeAttemptLimiterTest {
     @BeforeEach
     void setUp() {
         clock = new MutableClock(Instant.parse("2026-10-10T00:00:00Z"));
-        RoomProperties properties = new RoomProperties(Duration.ofSeconds(60),
+        RoomProperties properties = new RoomProperties(Duration.ofSeconds(60), 500,
                 new RoomProperties.CodeAttempts(3, Duration.ofMinutes(10)));
         limiter = new CodeAttemptLimiter(clock, properties);
     }

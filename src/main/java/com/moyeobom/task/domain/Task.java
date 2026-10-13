@@ -20,6 +20,8 @@ import lombok.NoArgsConstructor;
 public class Task {
 
     public static final int TITLE_MAX_LENGTH = 100;
+    /** 스프린트 하나에 둘 수 있는 할 일 수. 요청 하나로 DB를 채우는 것을 막는다 */
+    public static final int MAX_PER_SPRINT = 50;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

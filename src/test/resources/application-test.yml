@@ -8,7 +8,10 @@ moyeobom:
   focus:
     stale-check-interval: PT24H
     heartbeat-interval: PT24H
-  # 테스트 클래스들이 같은 곳(127.0.0.1)에서 없는 코드를 넣으므로 서로 막히지 않게 넉넉히 둔다
+  # 테스트 클래스들이 모두 같은 곳(127.0.0.1)에서 게스트를 받고 없는 코드를 넣으므로 서로 막히지 않게 넉넉히 둔다
   room:
     code-attempts:
       max-failures: 1000
+  guest:
+    issue-limit:
+      max-issues: 100000

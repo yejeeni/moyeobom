@@ -37,6 +37,9 @@ public class SprintService {
         if (request.tasks().isEmpty() && request.carriedTasks().isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "할 일을 하나 이상 적어 주세요.");
         }
+        if (request.tasks().size() + request.carriedTasks().size() > Task.MAX_PER_SPRINT) {
+            throw new BusinessException(ErrorCode.TASK_LIMIT_EXCEEDED);
+        }
         if (sprintQueryService.hasOpenSprint(guestId)) {
             throw new BusinessException(ErrorCode.SPRINT_ALREADY_OPEN);
         }

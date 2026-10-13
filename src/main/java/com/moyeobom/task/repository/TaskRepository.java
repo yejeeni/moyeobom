@@ -13,6 +13,8 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     long countBySprintIdAndStatus(Long sprintId, TaskStatus status);
 
+    long countBySprintId(Long sprintId);
+
     @Query("select coalesce(max(t.sortOrder), 0) from Task t where t.sprintId = :sprintId")
     int findMaxSortOrder(Long sprintId);
 

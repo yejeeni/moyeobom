@@ -1,5 +1,6 @@
 package com.moyeobom.common.config;
 
+import com.moyeobom.room.websocket.RoomTopicOutboundFilter;
 import com.moyeobom.room.websocket.StompGuestInterceptor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Configuration;
@@ -21,13 +22,16 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private static final long HEARTBEAT_MILLIS = 10_000;
 
     private final StompGuestInterceptor stompGuestInterceptor;
+    private final RoomTopicOutboundFilter roomTopicOutboundFilter;
     private final TaskScheduler taskScheduler;
     private final CorsProperties corsProperties;
 
     public WebSocketConfig(StompGuestInterceptor stompGuestInterceptor,
+                           RoomTopicOutboundFilter roomTopicOutboundFilter,
                            @Qualifier(SchedulingConfig.TASK_SCHEDULER) TaskScheduler taskScheduler,
                            CorsProperties corsProperties) {
         this.stompGuestInterceptor = stompGuestInterceptor;
+        this.roomTopicOutboundFilter = roomTopicOutboundFilter;
         this.taskScheduler = taskScheduler;
         this.corsProperties = corsProperties;
     }
@@ -50,5 +54,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         registration.interceptors(stompGuestInterceptor);
+    }
+
+    @Override
+    public void configureClientOutboundChannel(ChannelRegistration registration) {
+        registration.interceptors(roomTopicOutboundFilter);
     }
 }

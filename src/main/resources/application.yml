@@ -24,8 +24,15 @@ moyeobom:
   cors:
     allowed-origins:
       - http://localhost:5173
+  guest:
+    # 같은 곳(IP)에서 window 안에 게스트를 max-issues번 넘게 받으면 잠시 막는다
+    issue-limit:
+      max-issues: 30
+      window: PT10M
   room:
     grace-period: 60s
+    # 서버 한 대에 동시에 둘 수 있는 열람실 수
+    max-rooms: 500
     # 같은 곳(IP)에서 없는 코드를 window 안에 max-failures번 넣으면 잠시 막는다
     code-attempts:
       max-failures: 10

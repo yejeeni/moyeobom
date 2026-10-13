@@ -1,9 +1,11 @@
 package com.moyeobom.sprint.dto;
 
+import com.moyeobom.task.domain.Task;
 import com.moyeobom.task.dto.TaskDtos.CarriedTaskRequest;
 import com.moyeobom.task.dto.TaskDtos.TaskCreateRequest;
 import com.moyeobom.task.dto.TaskDtos.TaskResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 
@@ -16,8 +18,8 @@ public final class SprintDtos {
      * 새 할 일과 이월 할 일을 합쳐 1개 이상이어야 한다.
      */
     public record SprintStartRequest(
-            List<@Valid TaskCreateRequest> tasks,
-            List<@Valid CarriedTaskRequest> carriedTasks
+            @Size(max = Task.MAX_PER_SPRINT) List<@Valid TaskCreateRequest> tasks,
+            @Size(max = Task.MAX_PER_SPRINT) List<@Valid CarriedTaskRequest> carriedTasks
     ) {
 
         public SprintStartRequest {

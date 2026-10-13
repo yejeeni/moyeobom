@@ -14,7 +14,8 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
     ports:
-      - "${DB_PORT:-3306}:3306"
+      # 이 컴퓨터에서만 접속할 수 있게 묶는다. 서버에서 띄워도 DB 포트가 인터넷에 열리지 않는다
+      - "127.0.0.1:${DB_PORT:-3306}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:

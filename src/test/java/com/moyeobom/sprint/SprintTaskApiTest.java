@@ -1,5 +1,6 @@
 package com.moyeobom.sprint;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -11,6 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import com.moyeobom.support.IntegrationTestSupport;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
@@ -74,6 +77,40 @@ class SprintTaskApiTest extends IntegrationTestSupport {
         addTask(guest, "{\"title\": \"51번째\"}")
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("TASK_LIMIT_EXCEEDED"));
+    }
+
+    @Test
+    void 공부할_시간을_정해_시작하고_연장하면_회고에_계획_시간이_나온다() throws Exception {
+        String guest = issueGuest();
+
+        startSprint(guest, "{\"tasks\": [{\"title\": \"알고리즘\"}], \"plannedMinutes\": 20}")
+                .andExpect(status().isBadRequest());
+        String body = startSprint(guest, "{\"tasks\": [{\"title\": \"알고리즘\"}], \"plannedMinutes\": 120}")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.sprint.plannedMinutes").value(120))
+                .andReturn().getResponse().getContentAsString();
+        Instant startedAt = Instant.parse(JsonPath.read(body, "$.sprint.startedAt"));
+        Instant endsAt = Instant.parse(JsonPath.read(body, "$.sprint.endsAt"));
+        assertThat(Duration.between(startedAt, endsAt)).isEqualTo(Duration.ofMinutes(120));
+
+        // 30분 더
+        mockMvc.perform(patch("/api/v1/sprints/current").header("X-Guest-Id", guest)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"plannedMinutes\": 150}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sprint.plannedMinutes").value(150));
+        mockMvc.perform(get("/api/v1/sprints/current/review").header("X-Guest-Id", guest))
+                .andExpect(jsonPath("$.plannedSeconds").value(150 * 60));
+    }
+
+    @Test
+    void 공부할_시간_없이_시작하면_타임박스가_없다() throws Exception {
+        String guest = issueGuest();
+
+        startSprint(guest, TWO_TASKS)
+                .andExpect(jsonPath("$.sprint.plannedMinutes").isEmpty())
+                .andExpect(jsonPath("$.sprint.endsAt").isEmpty());
+        mockMvc.perform(get("/api/v1/sprints/current/review").header("X-Guest-Id", guest))
+                .andExpect(jsonPath("$.plannedSeconds").isEmpty());
     }
 
     @Test

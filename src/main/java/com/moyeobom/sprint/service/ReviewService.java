@@ -70,7 +70,8 @@ public class ReviewService {
             reviewTasks.add(new ReviewTask(task.getId(), task.getTitle(), task.getStatus(), estimatedSeconds,
                     time.actualSeconds(), diffSeconds, time.cumulativeSeconds()));
         }
-        return new ReviewResponse(sprint.getId(), totalFocusSeconds, completedCount, estimatedOfDone, actualOfDone,
+        Long plannedSeconds = sprint.getPlannedMinutes() == null ? null : sprint.getPlannedMinutes() * 60L;
+        return new ReviewResponse(sprint.getId(), plannedSeconds, totalFocusSeconds, completedCount, estimatedOfDone, actualOfDone,
                 reviewTasks);
     }
 

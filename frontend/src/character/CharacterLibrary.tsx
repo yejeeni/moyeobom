@@ -1,6 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { BUILTIN_CHARACTERS, resolveFrames, type CharacterAsset, type FrameKey, type Tempo } from './characters'
-import { deleteCharacter, importFiles, listCharacters, saveCharacter, type ImportResult, type StoredCharacter } from './library'
+import { BUILTIN_CHARACTERS, resolveFrames, type CharacterAsset, type FrameState } from './characters'
+import {
+  deleteCharacter,
+  frameMsOf,
+  groupFrames,
+  importFiles,
+  listCharacters,
+  saveCharacter,
+  type ImportResult,
+  type StoredCharacter,
+} from './library'
 
 export interface CharacterPrefs {
   /** 내 캐릭터가 있어도 기본 캐릭터를 함께 쓴다 */
@@ -33,7 +42,8 @@ interface LibraryApi {
   shuffleVersion: number
   importFolder: (files: File[]) => Promise<ImportResult>
   remove: (id: string) => Promise<void>
-  setTempo: (id: string, tempo: Tempo) => Promise<void>
+  /** 한 장당 시간(ms) 바꾸기 */
+  setFrameMs: (id: string, frameMs: number) => Promise<void>
   setPrefs: (change: Partial<CharacterPrefs>) => void
   reshuffle: () => void
 }
@@ -63,12 +73,19 @@ export function CharacterLibraryProvider({ children }: { children: ReactNode }) 
       return url
     }
     const assets = list.flatMap((c): CharacterAsset[] => {
-      const available = Object.fromEntries(
-        Object.entries(c.frames).map(([key, blob]) => [key, toUrl(blob)]),
-      ) as Partial<Record<FrameKey, string>>
+      const available = groupFrames(Object.fromEntries(Object.entries(c.frames).map(([key, blob]) => [key, toUrl(blob)])))
       const frames = resolveFrames(available)
       if (!frames) return []
-      return [{ id: c.id, name: c.name, source: 'mine', tempo: c.tempo, frames, background: c.background ? toUrl(c.background) : null }]
+      const background = c.background ? toUrl(c.background) : null
+      // 움짤 주소 → 첫 장면 주소(움짤 한 장인 상태와 배경)
+      const stills: Record<string, string> = {}
+      for (const [key, still] of Object.entries(c.stills ?? {})) {
+        const list = key === 'background' ? null : available[key as FrameState]
+        const animated = key === 'background' ? background : list?.length === 1 ? list[0] : null
+        if (animated && still) stills[animated] = toUrl(still)
+      }
+      const fillsSeat = Object.values(c.frames).some((blob) => blob.type === 'image/gif')
+      return [{ id: c.id, name: c.name, source: 'mine', frameMs: frameMsOf(c), frames, background, stills, fillsSeat }]
     })
     urlsRef.current = urls
     setStored(list)
@@ -111,11 +128,11 @@ export function CharacterLibraryProvider({ children }: { children: ReactNode }) 
     [prefs.myCharacterId, setPrefs, reload],
   )
 
-  const setTempo = useCallback(
-    async (id: string, tempo: Tempo) => {
+  const setFrameMs = useCallback(
+    async (id: string, frameMs: number) => {
       const target = stored.find((c) => c.id === id)
       if (!target) return
-      await saveCharacter({ ...target, tempo })
+      await saveCharacter({ ...target, frameMs })
       await reload()
     },
     [stored, reload],
@@ -138,11 +155,11 @@ export function CharacterLibraryProvider({ children }: { children: ReactNode }) 
       shuffleVersion,
       importFolder,
       remove,
-      setTempo,
+      setFrameMs,
       setPrefs,
       reshuffle,
     }),
-    [ready, mine, pool, prefs, shuffleVersion, importFolder, remove, setTempo, setPrefs, reshuffle],
+    [ready, mine, pool, prefs, shuffleVersion, importFolder, remove, setFrameMs, setPrefs, reshuffle],
   )
 
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>

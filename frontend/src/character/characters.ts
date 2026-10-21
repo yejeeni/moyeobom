@@ -116,7 +116,12 @@ function builtinGif(id: string, name: string): CharacterAsset {
 }
 
 // TODO 공개 배포 전에 바꾼다. 저작권이 있는 그림(치이카와)이라 비공개 테스트에서 자리를 채우는 용도로만 쓴다
-export const BUILTIN_CHARACTERS: CharacterAsset[] = [builtinGif('chiikawa', '치이카와'), builtinGif('hachiware', '하치와레')]
+export const BUILTIN_CHARACTERS: CharacterAsset[] = [
+  builtinGif('chiikawa', '치이카와'),
+  builtinGif('hachiware', '하치와레'),
+  builtinGif('usagi', '우사기'),
+  builtinGif('chiikawa2', '치이카와 2'),
+]
 
 /** 서버가 준 파츠 번호로 기본 캐릭터를 고른다(소개 화면 미리보기용). */
 export function pickBuiltin(parts: CharacterParts): CharacterAsset {

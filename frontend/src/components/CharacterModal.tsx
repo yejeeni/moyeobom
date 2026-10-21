@@ -86,9 +86,6 @@ export function CharacterModal({ onClose }: { onClose: () => void }) {
                   <Icon name="upload" size={16} />
                   {importing ? '가져오는 중…' : '폴더 가져오기'}
                 </button>
-                <a className="preview-button" href="/characters/template.png" download="moyeobom-character-template.png">
-                  그리기 가이드 받기
-                </a>
               </div>
               <input ref={folderInput} type="file" multiple accept="image/png,image/webp,image/jpeg" hidden onChange={onPick} />
             </div>

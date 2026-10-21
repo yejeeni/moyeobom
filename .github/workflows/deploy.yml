@@ -1,6 +1,6 @@
 name: Deploy
 
-# main의 CI가 통과하면 서버에 접속해 최신 코드로 다시 띄운다. Actions 탭에서 직접 실행할 수도 있다
+# main의 CI가 통과하면 이미지를 여기서 만들어 서버로 보낸다(서버는 메모리가 작아 빌드하지 않는다). Actions 탭에서 직접 실행할 수도 있다
 on:
   workflow_run:
     workflows: [ CI ]
@@ -14,22 +14,41 @@ jobs:
   deploy:
     if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
+    env:
+      HOST: ${{ secrets.DEPLOY_HOST }}
     steps:
-      - name: Deploy over SSH
+      # 서버를 아직 연결하지 않았으면 실패 대신 건너뛴다
+      - name: Check server
+        id: server
+        run: |
+          if [ -z "$HOST" ]; then
+            echo "DEPLOY_HOST가 없어 배포를 건너뜁니다"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.server.outputs.ready
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      # 서버(E2.1.Micro)가 AMD라 러너(amd64)에서 그대로 빌드한다
+      - name: Build images
+        if: steps.server.outputs.ready
+        run: |
+          docker build -t moyeobom-app .
+          docker build -t moyeobom-web -f deploy/web.Dockerfile .
+
+      - name: Send images and restart
+        if: steps.server.outputs.ready
         env:
-          HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
           SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
-          # 서버를 아직 연결하지 않았으면 실패 대신 건너뛴다
-          if [ -z "$HOST" ]; then
-            echo "DEPLOY_HOST가 없어 배포를 건너뜁니다"
-            exit 0
-          fi
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/id_ed25519
           echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/id_ed25519
           # 서버의 authorized_keys가 이 키로는 deploy/deploy.sh만 실행하게 묶어 둔다
-          ssh "$USER@$HOST"
+          docker save moyeobom-app moyeobom-web | gzip | ssh "$USER@$HOST"

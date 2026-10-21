@@ -28,13 +28,15 @@ Oracle은 두 군데를 모두 열어야 한다.
 | 0.0.0.0/0 | TCP | 80 |
 | 0.0.0.0/0 | TCP | 443 |
 
-**서버 안 방화벽:** Oracle의 Ubuntu 이미지는 iptables가 22번만 열어 둔다.
+**서버 안 방화벽:** Oracle의 Ubuntu 이미지는 iptables가 22번만 열어 둔다. 허용 규칙은 REJECT 규칙보다 **앞에** 있어야 한다. REJECT의 번호는 이미지마다 달라서(5번 또는 6번) 먼저 찾아서 그 자리에 넣는다.
 
 ```bash
 ssh -i <내려받은 개인 키> ubuntu@<Public IP>
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+N=$(sudo iptables -L INPUT -n --line-numbers | awk '/REJECT/{print $1; exit}')
+sudo iptables -I INPUT $N -m state --state NEW -p tcp --dport 443 -j ACCEPT
+sudo iptables -I INPUT $N -m state --state NEW -p tcp --dport 80 -j ACCEPT
 sudo netfilter-persistent save
+sudo iptables -L INPUT -n --line-numbers   # 80, 443이 REJECT보다 위에 있어야 한다
 ```
 
 ## 3. 스왑과 도커

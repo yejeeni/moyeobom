@@ -15,9 +15,11 @@ public final class ReviewDtos {
     /**
      * @param estimatedSecondsOfDone 예상 시간이 있는 완료 할 일의 예상 합계
      * @param actualSecondsOfDone    예상 시간이 있는 완료 할 일의 실제 합계
+     * @param plannedSeconds         계획한 공부 시간(타임박스). 타임박스 없이 시작했으면 null
      */
     public record ReviewResponse(
             Long sprintId,
+            Long plannedSeconds,
             long totalFocusSeconds,
             int completedCount,
             long estimatedSecondsOfDone,

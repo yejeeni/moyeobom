@@ -6,6 +6,7 @@ import com.moyeobom.sprint.dto.ReviewDtos.SprintCloseRequest;
 import com.moyeobom.sprint.dto.ReviewDtos.SprintCloseResponse;
 import com.moyeobom.sprint.dto.SprintDtos.CarryoverResponse;
 import com.moyeobom.sprint.dto.SprintDtos.CurrentSprintResponse;
+import com.moyeobom.sprint.dto.SprintDtos.SprintPlanRequest;
 import com.moyeobom.sprint.dto.SprintDtos.SprintStartRequest;
 import com.moyeobom.sprint.service.ReviewService;
 import com.moyeobom.sprint.service.SprintService;
@@ -15,6 +16,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -47,6 +49,15 @@ public class SprintController {
     @ResponseStatus(HttpStatus.CREATED)
     public CurrentSprintResponse start(@CurrentGuest Long guestId, @Valid @RequestBody SprintStartRequest request) {
         return sprintService.start(guestId, request);
+    }
+
+    @Operation(summary = "타임박스 바꾸기", description = """
+            계획한 공부 시간을 바꾼다(30~720분). 시작 시각부터 센 전체 시간이며, 연장할 때는 지금 값에 더해 보낸다.
+            시간이 지나도 스프린트는 자동으로 닫히지 않는다
+            """)
+    @PatchMapping("/current")
+    public CurrentSprintResponse changePlan(@CurrentGuest Long guestId, @Valid @RequestBody SprintPlanRequest request) {
+        return sprintService.changePlan(guestId, request.plannedMinutes());
     }
 
     @Operation(summary = "회고 조회", description = """

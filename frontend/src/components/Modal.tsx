@@ -5,9 +5,11 @@ interface Props {
   title: string
   onClose: () => void
   children: ReactNode
+  /** 넓은 모달 등 모양을 바꿀 때 */
+  className?: string
 }
 
-export function Modal({ title, onClose, children }: Props) {
+export function Modal({ title, onClose, children, className }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -20,7 +22,7 @@ export function Modal({ title, onClose, children }: Props) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
-        className="modal"
+        className={`modal ${className ?? ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

@@ -1,4 +1,4 @@
-import { FRAME_KEYS, describeMissing, type FrameKey, type Tempo } from './characters'
+import { DEFAULT_FRAME_MS, MAX_FRAMES, describeMissing, parseFrameName, type FrameName, type FrameState } from './characters'
 
 /**
  * 사용자가 등록한 캐릭터를 브라우저 저장소(IndexedDB)에 둔다. 서버로는 보내지 않는다.
@@ -8,10 +8,37 @@ import { FRAME_KEYS, describeMissing, type FrameKey, type Tempo } from './charac
 export interface StoredCharacter {
   id: string
   name: string
-  tempo: Tempo
+  /** 한 장당 시간(집중 기준, ms). 예전에 저장한 캐릭터에는 없고 tempo만 있다 */
+  frameMs?: number
+  /** 예전 빠르기 설정. typing은 빠르게, writing은 느리게 */
+  tempo?: 'typing' | 'writing'
   createdAt: number
-  frames: Partial<Record<FrameKey, Blob>>
+  /** 파일 이름(확장자 뺀) → 그림. focus-1, focus-a(예전 이름), focus(움짤 한 장) 등 */
+  frames: Record<string, Blob>
   background: Blob | null
+  /** 움짤 한 장(focus 등)과 배경의 첫 장면. '움직임 줄이기'용이며 예전에 저장한 캐릭터에는 없다 */
+  stills?: Partial<Record<FrameState | 'background', Blob>>
+}
+
+/** 예전 빠르기 설정까지 고려한 한 장당 시간 */
+export function frameMsOf(character: StoredCharacter): number {
+  if (character.frameMs) return character.frameMs
+  return character.tempo === 'writing' ? 330 : DEFAULT_FRAME_MS
+}
+
+/** 저장된 그림을 상태별로 넘기는 순서대로 묶는다. 움짤 한 장이 있으면 그 상태는 그것만 */
+export function groupFrames<T>(frames: Record<string, T>): Partial<Record<FrameState, T[]>> {
+  const named = Object.entries(frames)
+    .map(([key, value]) => ({ name: parseFrameName(key), value }))
+    .filter((entry): entry is { name: FrameName; value: T } => entry.name !== null)
+  const grouped: Partial<Record<FrameState, T[]>> = {}
+  for (const state of ['focus', 'break', 'idle'] as const) {
+    const mine = named.filter((entry) => entry.name.state === state)
+    const animated = mine.find((entry) => entry.name.animated)
+    if (animated) grouped[state] = [animated.value]
+    else if (mine.length > 0) grouped[state] = mine.sort((a, b) => a.name.order - b.name.order).map((entry) => entry.value)
+  }
+  return grouped
 }
 
 export interface ImportResult {
@@ -24,8 +51,9 @@ export interface ImportResult {
 
 const DB_NAME = 'moyeobom'
 const STORE = 'characters'
-const MAX_FILE_BYTES = 3 * 1024 * 1024
-const IMAGE_EXT = /\.(png|webp|jpe?g)$/i
+// 움짤은 용량이 커서 그림 한 장당 5MB까지 받는다
+const MAX_FILE_BYTES = 5 * 1024 * 1024
+const IMAGE_EXT = /\.(png|apng|webp|gif|jpe?g)$/i
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -88,29 +116,50 @@ export async function importFiles(files: File[], existing: StoredCharacter[]): P
   }
 
   for (const { name, files: groupFiles } of groups.values()) {
-    const frames: Partial<Record<FrameKey, Blob>> = {}
+    const candidates: { key: string; frame: FrameName; file: File }[] = []
+    const stills: Partial<Record<FrameState | 'background', Blob>> = {}
     let background: Blob | null = null
     for (const file of groupFiles) {
       const key = file.name.replace(IMAGE_EXT, '').toLowerCase()
-      const isFrame = (FRAME_KEYS as string[]).includes(key)
-      if (!isFrame && key !== 'background') continue
+      const frame = parseFrameName(key)
+      if (!frame && key !== 'background') continue
       if (file.size > MAX_FILE_BYTES) {
-        result.problems.push(`${name}/${file.name}: 3MB보다 커서 건너뛰었어요`)
+        result.problems.push(`${name}/${file.name}: 5MB보다 커서 건너뛰었어요`)
         continue
       }
-      if (isFrame) frames[key as FrameKey] = file
-      else background = file
+      if (frame) {
+        candidates.push({ key, frame, file })
+        continue
+      }
+      background = file
+      const still = await firstFrame(file)
+      if (still) stills.background = still
     }
 
-    const frameKeys = Object.keys(frames) as FrameKey[]
+    // 상태마다 앞 MAX_FRAMES장만 저장한다. 움짤 한 장은 첫 장면을 따로 만들어 둔다
+    const frames: Record<string, Blob> = {}
+    for (const state of ['focus', 'break', 'idle'] as const) {
+      const mine = candidates.filter((c) => c.frame.state === state)
+      const animated = mine.find((c) => c.frame.animated)
+      const kept = animated ? [animated] : mine.sort((a, b) => a.frame.order - b.frame.order).slice(0, MAX_FRAMES)
+      for (const c of kept) frames[c.key] = c.file
+      if (animated) {
+        const still = await firstFrame(animated.file)
+        if (still) stills[state] = still
+      }
+    }
+
+    const frameKeys = Object.keys(frames)
     if (frameKeys.length === 0) {
       // 캐릭터 그림이 없는 폴더(상위 폴더, 템플릿 등)는 조용히 넘어가고, 배경만 있으면 알려 준다
-      if (background) result.problems.push(`${name}: 캐릭터 그림(focus-a.png 등)이 없어 건너뛰었어요`)
+      if (background) result.problems.push(`${name}: 캐릭터 그림(focus-1.png 등)이 없어 건너뛰었어요`)
       continue
     }
 
-    const sizeNote = await checkSize(frames[frameKeys[0]]!)
-    describeMissing(frameKeys).forEach((note) => result.notes.push(`${name}: ${note}`))
+    // GIF는 칸을 꽉 채워 그리므로 캔버스 비율을 따지지 않는다
+    const first = frames[frameKeys[0]]!
+    const sizeNote = first.type === 'image/gif' ? null : await checkSize(first)
+    describeMissing(candidates.map((c) => c.frame)).forEach((note) => result.notes.push(`${name}: ${note}`))
     if (sizeNote) result.notes.push(`${name}: ${sizeNote}`)
 
     const id = `mine:${name}`
@@ -118,18 +167,34 @@ export async function importFiles(files: File[], existing: StoredCharacter[]): P
     await saveCharacter({
       id,
       name,
-      tempo: previous?.tempo ?? 'typing',
+      frameMs: previous ? frameMsOf(previous) : DEFAULT_FRAME_MS,
       createdAt: previous?.createdAt ?? Date.now(),
       frames,
       background,
+      stills,
     })
     result.imported.push(name)
   }
 
   if (result.imported.length === 0 && result.problems.length === 0) {
-    result.problems.push('가져올 캐릭터 그림을 찾지 못했어요. 파일 이름이 focus-a.png 같은 규칙을 따르는지 확인해 주세요')
+    result.problems.push('가져올 캐릭터 그림을 찾지 못했어요. 파일 이름이 focus-1.png나 focus.gif 같은 규칙을 따르는지 확인해 주세요')
   }
   return result
+}
+
+/** 그림의 첫 장면을 멈춘 PNG로 만든다. 움짤이 아니어도 같은 그림이 나올 뿐이다 */
+async function firstFrame(image: Blob): Promise<Blob | null> {
+  try {
+    const bitmap = await createImageBitmap(image)
+    const canvas = document.createElement('canvas')
+    canvas.width = bitmap.width
+    canvas.height = bitmap.height
+    canvas.getContext('2d')?.drawImage(bitmap, 0, 0)
+    bitmap.close()
+    return await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
+  } catch {
+    return null
+  }
 }
 
 /** 캔버스는 800x600(4:3) 기준. 비율이 다르면 위치가 어긋날 수 있다고 알려 준다. */

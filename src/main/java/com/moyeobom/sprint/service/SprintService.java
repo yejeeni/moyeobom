@@ -45,7 +45,7 @@ public class SprintService {
         }
         Sprint sprint;
         try {
-            sprint = sprintRepository.saveAndFlush(Sprint.open(guestId, Times.now(clock)));
+            sprint = sprintRepository.saveAndFlush(Sprint.open(guestId, Times.now(clock), request.plannedMinutes()));
         } catch (DataIntegrityViolationException e) {
             // 동시에 두 번 시작하면 open_guest_id UNIQUE가 막는다
             throw new BusinessException(ErrorCode.SPRINT_ALREADY_OPEN);
@@ -72,8 +72,17 @@ public class SprintService {
                 .toList());
     }
 
+    /** 타임박스를 바꾼다. 연장은 시작 시각부터 센 전체 시간으로 보낸다(예: 2시간 계획에 30분 더 → 150) */
+    @Transactional
+    public CurrentSprintResponse changePlan(Long guestId, int plannedMinutes) {
+        Sprint sprint = sprintQueryService.lockOpenSprint(guestId);
+        sprint.changePlannedMinutes(plannedMinutes);
+        return new CurrentSprintResponse(toView(sprint));
+    }
+
     private SprintView toView(Sprint sprint) {
-        return new SprintView(sprint.getId(), Times.toInstant(sprint.getStartedAt()),
+        return new SprintView(sprint.getId(), Times.toInstant(sprint.getStartedAt()), sprint.getPlannedMinutes(),
+                sprint.endsAt() == null ? null : Times.toInstant(sprint.endsAt()),
                 taskQueryService.findTaskResponses(sprint.getId()));
     }
 }

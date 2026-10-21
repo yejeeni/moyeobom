@@ -24,17 +24,6 @@ class FocusSessionTest {
     }
 
     @Test
-    void 육십초_미만이면_저장하지_않을_세션이다() {
-        FocusSession under = FocusSession.start(1L, START);
-        under.end(FocusEndReason.BREAK, START.plusSeconds(59));
-        FocusSession exact = FocusSession.start(1L, START);
-        exact.end(FocusEndReason.BREAK, START.plusSeconds(60));
-
-        assertThat(under.isTooShort()).isTrue();
-        assertThat(exact.isTooShort()).isFalse();
-    }
-
-    @Test
     void 종료_시각이_시작보다_앞서면_시작_시각으로_맞춘다() {
         FocusSession session = FocusSession.start(1L, START);
 

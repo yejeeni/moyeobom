@@ -23,8 +23,10 @@ export const api = {
 
   currentSprint: () => request<{ sprint: SprintView | null }>('GET', '/sprints/current'),
   carryover: () => request<{ tasks: CarryoverTask[] }>('GET', '/sprints/carryover'),
-  startSprint: (tasks: NewTask[], carriedTasks: CarriedTask[]) =>
-    request<{ sprint: SprintView }>('POST', '/sprints', { tasks, carriedTasks }),
+  startSprint: (tasks: NewTask[], carriedTasks: CarriedTask[], plannedMinutes: number) =>
+    request<{ sprint: SprintView }>('POST', '/sprints', { tasks, carriedTasks, plannedMinutes }),
+  /** 타임박스 바꾸기. 시작부터 센 전체 시간(분) */
+  changePlan: (plannedMinutes: number) => request<{ sprint: SprintView }>('PATCH', '/sprints/current', { plannedMinutes }),
 
   addTask: (task: NewTask) => request<Task>('POST', '/sprints/current/tasks', task),
   updateTask: (taskId: number, body: { title?: string; estimatedMinutes?: number; sortOrder?: number }) =>

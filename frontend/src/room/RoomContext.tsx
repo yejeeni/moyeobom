@@ -111,7 +111,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           const nowWaiting = Boolean((event.payload as { waiting?: boolean } | null)?.waiting)
           seatsRef.current = { ...seatsRef.current, [seatNo]: null }
           setState((s) => ({ ...s, seats: seatsRef.current, waiting: { ...s.waiting, [seatNo]: nowWaiting } }))
-          if (left) toast.show(`${left.nickname}님이 자리를 떠났어요`)
+          // 오늘 마무리처럼 내가 나간 알림은 나에게 띄우지 않는다
+          if (left && seatNo !== mySeatRef.current) toast.show(`${left.nickname}님이 자리를 떠났어요`)
           return
         }
         case 'STATE_CHANGED':
@@ -208,16 +209,26 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
   const join = useCallback(async (code: string) => attach(await api.joinRoom(code)), [attach])
 
-  const enter = useCallback(async () => {
-    try {
-      return attach(await api.currentRoom())
-    } catch (e) {
-      if (!isApiError(e, 'ROOM_NOT_FOUND')) throw e
-      const hadRoom = roomIdRef.current !== null
-      const created = await create(getRoomConfig())
-      if (hadRoom) toast.show('열람실이 닫혀 새 열람실을 열었어요')
-      return created
-    }
+  // 들어가는 중에 또 부르면(개발 모드의 화면 진입 두 번 실행, 재연결과 겹침 등) 같은 요청을 기다린다.
+  // 따로 부르면 방이 없을 때 방을 두 개 만들고, 화면이 내가 없는 방을 구독하게 된다
+  const enteringRef = useRef<Promise<RoomEnter> | null>(null)
+  const enter = useCallback(() => {
+    if (enteringRef.current) return enteringRef.current
+    const entering = (async () => {
+      try {
+        return attach(await api.currentRoom())
+      } catch (e) {
+        if (!isApiError(e, 'ROOM_NOT_FOUND')) throw e
+        const hadRoom = roomIdRef.current !== null
+        const created = await create(getRoomConfig())
+        if (hadRoom) toast.show('열람실이 닫혀 새 열람실을 열었어요')
+        return created
+      }
+    })().finally(() => {
+      enteringRef.current = null
+    })
+    enteringRef.current = entering
+    return entering
   }, [attach, create, toast])
 
   useEffect(() => {

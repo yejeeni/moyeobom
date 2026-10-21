@@ -10,79 +10,34 @@ import com.moyeobom.room.service.CodeAttemptLimiter;
 import com.moyeobom.support.MutableClock;
 import java.time.Duration;
 import java.time.Instant;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/** 횟수 세기와 기간은 SlidingWindowCounterTest에서 확인하고, 여기서는 무엇을 실패로 세는지만 본다 */
 class CodeAttemptLimiterTest {
 
     private static final String CLIENT = "203.0.113.7";
 
-    MutableClock clock;
-    CodeAttemptLimiter limiter;
-
-    @BeforeEach
-    void setUp() {
-        clock = new MutableClock(Instant.parse("2026-10-10T00:00:00Z"));
-        RoomProperties properties = new RoomProperties(Duration.ofSeconds(60), 500,
-                new RoomProperties.CodeAttempts(3, Duration.ofMinutes(10)));
-        limiter = new CodeAttemptLimiter(clock, properties);
-    }
-
     @Test
-    void 없는_코드를_정해진_횟수만큼_넣으면_맞는_코드도_잠시_막힌다() {
-        fail(CLIENT);
-        fail(CLIENT);
-        fail(CLIENT);
+    void 없는_코드만_실패로_세고_정해진_횟수를_넘으면_맞는_코드도_잠시_막힌다() {
+        CodeAttemptLimiter limiter = new CodeAttemptLimiter(new MutableClock(Instant.parse("2026-10-10T00:00:00Z")),
+                new RoomProperties(Duration.ofSeconds(60), 500, new RoomProperties.CodeAttempts(3, Duration.ofMinutes(10))));
 
-        assertThatThrownBy(() -> limiter.attempt(CLIENT, () -> "입장"))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.TOO_MANY_CODE_ATTEMPTS);
-    }
-
-    @Test
-    void 맞는_코드와_다른_오류는_세지_않는다() {
+        // 맞는 코드와 자리 다 참은 세지 않는다
         for (int i = 0; i < 5; i++) {
             limiter.attempt(CLIENT, () -> "입장");
             assertThatThrownBy(() -> limiter.attempt(CLIENT, () -> {
                 throw new BusinessException(ErrorCode.ROOM_FULL);
             })).isInstanceOf(BusinessException.class);
         }
-
-        assertThat(limiter.attempt(CLIENT, () -> "입장")).isEqualTo("입장");
-    }
-
-    @Test
-    void 기간이_지나면_오래된_실패부터_빠져_다시_시도할_수_있다() {
-        fail(CLIENT);
-        clock.advance(Duration.ofMinutes(5));
-        fail(CLIENT);
-        fail(CLIENT);
-
-        // 첫 실패가 10분을 넘기면 실패가 2번으로 줄어 다시 들어갈 수 있다
-        clock.advance(Duration.ofMinutes(5).plusSeconds(1));
         assertThat(limiter.attempt(CLIENT, () -> "입장")).isEqualTo("입장");
 
-        // 한 번 더 틀리면 다시 3번이 되어 막힌다
-        fail(CLIENT);
+        for (int i = 0; i < 3; i++) {
+            assertThatThrownBy(() -> limiter.attempt(CLIENT, () -> {
+                throw new BusinessException(ErrorCode.ROOM_NOT_FOUND);
+            })).extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.ROOM_NOT_FOUND);
+        }
         assertThatThrownBy(() -> limiter.attempt(CLIENT, () -> "입장"))
-                .isInstanceOf(BusinessException.class);
-    }
-
-    @Test
-    void 요청한_곳마다_따로_센다() {
-        fail(CLIENT);
-        fail(CLIENT);
-        fail(CLIENT);
-
-        assertThat(limiter.attempt("198.51.100.2", () -> "입장")).isEqualTo("입장");
-    }
-
-    private void fail(String client) {
-        assertThatThrownBy(() -> limiter.attempt(client, () -> {
-            throw new BusinessException(ErrorCode.ROOM_NOT_FOUND);
-        })).isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.ROOM_NOT_FOUND);
+                .isEqualTo(ErrorCode.TOO_MANY_CODE_ATTEMPTS);
     }
 }

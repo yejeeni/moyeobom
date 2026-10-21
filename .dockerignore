@@ -1,0 +1,9 @@
+.git
+.github
+.claude
+.gradle
+.env
+build
+docs
+**/node_modules
+frontend/dist

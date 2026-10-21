@@ -3,3 +3,19 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+
+server:
+  # 앞단 Caddy가 넘긴 X-Forwarded-For로 실제 사용자 IP를 본다. 내부망(도커) 프록시가 보낸 헤더만 믿는다
+  forward-headers-strategy: native
+
+# 운영에서는 API 문서 화면을 끈다
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+moyeobom:
+  cors:
+    # 운영 주소(https://도메인). 여러 개면 쉼표로 잇는다
+    allowed-origins: ${APP_ORIGIN}

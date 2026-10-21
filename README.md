@@ -54,7 +54,11 @@ npm run dev                 # http://localhost:5173
 | --- | --- | --- |
 | local | 로컬 개발 (기본값) | Docker Compose MySQL, `.env` |
 | test | 테스트 | Testcontainers MySQL |
-| prod | 운영 | 환경 변수 `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` |
+| prod | 운영 | 환경 변수 `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `APP_ORIGIN` |
+
+## 배포
+
+Oracle Cloud 서버 한 대에 `compose.prod.yaml`로 Caddy(HTTPS), 앱, MySQL을 띄운다. main에 병합되어 CI가 통과하면 자동으로 다시 배포된다. 서버 준비부터 자동 배포 연결까지는 [`deploy/README.md`](deploy/README.md).
 
 ## 패키지 구조
 

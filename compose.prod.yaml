@@ -1,0 +1,89 @@
+# 운영 서버용. 메모리 1GB(Oracle E2.1.Micro)에 맞춘다
+# 서버는 빌드하지 않는다. GitHub Actions가 app, web 이미지를 만들어 보내면 deploy/deploy.sh가 받아 띄운다
+# 메모리가 넉넉한 서버라면 docker compose -f compose.prod.yaml up -d --build로 직접 빌드해도 된다
+# 로컬 개발용 compose.yaml과 이름을 나눠, 같은 컴퓨터에서 띄워도 DB가 섞이지 않는다
+name: moyeobom-prod
+
+x-logging: &logging
+  # 로그가 디스크를 채우지 않게 서비스마다 10MB × 3개까지만 둔다
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: moyeobom
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      # 메모리를 아낀다. 데이터가 작아 버퍼가 작아도 충분하다
+      - --performance-schema=OFF
+      - --innodb-buffer-pool-size=64M
+      - --innodb-log-buffer-size=8M
+      - --max-connections=30
+      - --table-open-cache=200
+      - --tmp-table-size=16M
+      - --max-heap-table-size=16M
+    # 포트를 밖에 열지 않는다. app만 도커 내부망으로 접속한다
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  app:
+    build: .
+    image: moyeobom-app
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      # 힙 256MB, 스레드를 줄여 1GB 서버에서 MySQL과 함께 돈다
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx256m -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=64m -Xss512k -XX:+UseSerialGC
+      SERVER_TOMCAT_THREADS_MAX: 50
+      DB_URL: jdbc:mysql://mysql:3306/moyeobom
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      APP_ORIGIN: https://${DOMAIN}
+      TZ: UTC
+    depends_on:
+      mysql:
+        condition: service_healthy
+    logging: *logging
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+    image: moyeobom-web
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      # 받은 인증서를 보관한다. 지우면 다시 받다가 발급 횟수 제한에 걸릴 수 있다
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    logging: *logging
+
+volumes:
+  mysql-data:
+  caddy-data:
+  caddy-config:

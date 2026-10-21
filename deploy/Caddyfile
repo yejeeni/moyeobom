@@ -1,0 +1,31 @@
+# DOMAIN은 .env에서 받는다. 도메인이면 Let's Encrypt 인증서를 알아서 받고 갱신한다
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		# 글꼴(Pretendard)만 jsDelivr에서 받고, 나머지는 같은 출처만 쓴다. 캐릭터 그림은 브라우저에 저장된 blob/data 주소다
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# API와 WebSocket만 백엔드로 넘긴다. Swagger와 actuator는 밖에서 열리지 않는다
+	@backend path /api/* /ws /ws/*
+	handle @backend {
+		reverse_proxy app:8080
+	}
+
+	handle {
+		root * /srv
+		# 빌드 파일은 이름에 해시가 붙어 오래 두고, 나머지(index.html 등)는 매번 새로 확인한다
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@others not path /assets/*
+		header @others Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}

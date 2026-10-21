@@ -37,7 +37,10 @@ class SprintTaskApiTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.sprint.tasks", hasSize(2)))
                 .andExpect(jsonPath("$.sprint.tasks[1].title").value("자소서 수정"))
                 .andExpect(jsonPath("$.sprint.tasks[1].estimatedMinutes").isEmpty())
-                .andExpect(jsonPath("$.sprint.tasks[0].status").value("TODO"));
+                .andExpect(jsonPath("$.sprint.tasks[0].status").value("TODO"))
+                // 공부할 시간을 보내지 않으면 타임박스가 없다
+                .andExpect(jsonPath("$.sprint.plannedMinutes").isEmpty())
+                .andExpect(jsonPath("$.sprint.endsAt").isEmpty());
 
         mockMvc.perform(get("/api/v1/guests/me").header("X-Guest-Id", guest))
                 .andExpect(jsonPath("$.hasOpenSprint").value(true));
@@ -100,17 +103,6 @@ class SprintTaskApiTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.sprint.plannedMinutes").value(150));
         mockMvc.perform(get("/api/v1/sprints/current/review").header("X-Guest-Id", guest))
                 .andExpect(jsonPath("$.plannedSeconds").value(150 * 60));
-    }
-
-    @Test
-    void 공부할_시간_없이_시작하면_타임박스가_없다() throws Exception {
-        String guest = issueGuest();
-
-        startSprint(guest, TWO_TASKS)
-                .andExpect(jsonPath("$.sprint.plannedMinutes").isEmpty())
-                .andExpect(jsonPath("$.sprint.endsAt").isEmpty());
-        mockMvc.perform(get("/api/v1/sprints/current/review").header("X-Guest-Id", guest))
-                .andExpect(jsonPath("$.plannedSeconds").isEmpty());
     }
 
     @Test

@@ -61,7 +61,7 @@ class MateSchedulerTest {
     }
 
     @Test
-    void 처음_입장하면_메이트_4에서_8명이_이미_공부하던_중이고_나머지_자리는_나중에_채워진다() {
+    void 처음_입장하면_메이트_4에서_8명이_이미_공부하던_중이고_나머지_자리는_나중에_채워지며_인원은_방마다_다르다() {
         List<Occupant> mates = room.virtualSeats().stream().flatMap(seat -> seat.occupant().stream()).toList();
 
         assertThat(mates).hasSizeBetween(4, 8).allMatch(Occupant::isVirtual);
@@ -87,17 +87,13 @@ class MateSchedulerTest {
                 assertThat(total).isBetween(Duration.ofMinutes(5), Duration.ofMinutes(15));
             }
         }
-    }
 
-    @Test
-    void 방마다_처음_인원이_다르다() {
+        // 처음 인원은 방마다 다르다(나 포함 5~9명)
         Set<Long> counts = new HashSet<>();
         for (long seed = 0; seed < 30; seed++) {
             mateScheduler = newMateScheduler(seed);
             counts.add(createRoom().occupiedCount());
         }
-
-        // 나 포함 5~9명
         assertThat(counts).hasSizeGreaterThan(2).allMatch(count -> count >= 5 && count <= 9);
     }
 

@@ -2457,9 +2457,6 @@ input[aria-invalid='true'] {
   align-items: center;
   gap: 6px;
 }
-.character-import-actions .preview-button {
-  text-decoration: none;
-}
 .import-report {
   list-style: none;
   margin: 0;

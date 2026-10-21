@@ -12,7 +12,7 @@ import type { CharacterParts, SeatState } from '../api/types'
  *   GIF가 하나라도 있는 캐릭터는 칸 전체를 꽉 채워 그린다(fillsSeat).
  * - background        (선택) 책상까지 포함한 칸 전체 배경. 캐릭터와 같은 800x600 캔버스에 맞춰 그린다. 움짤도 된다.
  *
- * 그림은 800x600 투명 PNG이고 같은 위치 기준으로 그린다. 가이드는 public/characters/template.png.
+ * 그림은 800x600 투명 PNG이고 같은 위치 기준으로 그린다.
  * 기본 캐릭터는 public/characters/<id>/ 에 focus.gif, break.gif를 두고 BUILTIN_CHARACTERS에 한 줄 추가한다.
  * 사용자가 등록한 캐릭터는 브라우저(IndexedDB)에만 저장된다(library.ts).
  */
@@ -116,7 +116,12 @@ function builtinGif(id: string, name: string): CharacterAsset {
 }
 
 // TODO 공개 배포 전에 바꾼다. 저작권이 있는 그림(치이카와)이라 비공개 테스트에서 자리를 채우는 용도로만 쓴다
-export const BUILTIN_CHARACTERS: CharacterAsset[] = [builtinGif('chiikawa', '치이카와'), builtinGif('hachiware', '하치와레')]
+export const BUILTIN_CHARACTERS: CharacterAsset[] = [
+  builtinGif('chiikawa', '치이카와'),
+  builtinGif('hachiware', '하치와레'),
+  builtinGif('usagi', '우사기'),
+  builtinGif('chiikawa2', '치이카와 2'),
+]
 
 /** 서버가 준 파츠 번호로 기본 캐릭터를 고른다(소개 화면 미리보기용). */
 export function pickBuiltin(parts: CharacterParts): CharacterAsset {

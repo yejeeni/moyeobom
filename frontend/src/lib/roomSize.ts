@@ -12,7 +12,7 @@ export interface RoomConfig {
 const CONFIG_KEY = 'moyeobom.roomConfig'
 const LEGACY_SIZE_KEY = 'moyeobom.roomSize'
 export const MAX_ROOM_SIZE = 9
-export const DEFAULT_ROOM_CONFIG: RoomConfig = { virtualSeats: 8, realSeats: 1 }
+export const DEFAULT_ROOM_CONFIG: RoomConfig = { virtualSeats: 3, realSeats: 1 }
 
 export function isValidConfig({ virtualSeats, realSeats }: RoomConfig): boolean {
   return (

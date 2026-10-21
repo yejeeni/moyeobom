@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { isApiError } from '../api/client'
-import { CODE_LENGTH, MAX_ROOM_SIZE, normalizeCode, type RoomConfig } from '../lib/roomSize'
+import { CODE_LENGTH, DEFAULT_ROOM_CONFIG, MAX_ROOM_SIZE, normalizeCode, type RoomConfig } from '../lib/roomSize'
 import { Icon } from './Icon'
 
 export type RoomChoiceValue = { mode: 'create'; config: RoomConfig } | { mode: 'join'; code: string }
@@ -66,7 +66,7 @@ export function RoomChoice({ value, onChange, onCodeStatus }: Props) {
             type="radio"
             name="room-mode"
             checked={value.mode === 'create'}
-            onChange={() => onChange({ mode: 'create', config: config ?? { virtualSeats: 8, realSeats: 1 } })}
+            onChange={() => onChange({ mode: 'create', config: config ?? DEFAULT_ROOM_CONFIG })}
           />
           새 열람실
         </label>

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { Occupant } from '../api/types'
 import { backgroundFor } from '../character/backgrounds'
+import { MotionImage } from './MotionImage'
 import { phaseOf, pickBuiltin, type CharacterAsset } from '../character/characters'
-import { STATE_LABEL, elapsedSeconds, formatShort } from '../lib/time'
+import { STATE_LABEL, elapsedSeconds, formatShort, shownState } from '../lib/time'
 import { Character } from './Character'
 
 // 줌 화면의 각 칸처럼 자리마다 방 분위기를 조금씩 다르게 한다
@@ -85,16 +86,18 @@ export function SeatTile({ seatNo, occupant, isMe, now, offsetMs, compact, chara
     )
   }
 
-  const { state } = occupant
+  const state = shownState(occupant.state)
   const elapsed = elapsedSeconds(occupant.since, now, offsetMs)
-  const stateText = state === 'IDLE' ? '대기' : `${STATE_LABEL[state]} ${formatShort(elapsed)}`
+  // 아직 한 번도 시작하지 않은 사람(대기)은 지난 시간 없이 '휴식'만 보여 준다
+  const stateText = occupant.state === 'IDLE' ? STATE_LABEL.IDLE : `${STATE_LABEL[state]} ${formatShort(elapsed)}`
   const name = isMe ? `나 · ${occupant.nickname}` : occupant.nickname
   const tone = ROOM_TONES[(seatNo * 5) % ROOM_TONES.length]
   const flipped = FLIPPED_SEATS.has(seatNo)
   const asset = character ?? pickBuiltin(occupant.character)
   const phase = phaseOf(occupant.character)
-  // 캐릭터에 짝 배경이 있으면 배경과 캐릭터를 같은 칸 크기로 겹쳐 위치를 맞추고, 뒤집을 때도 함께 뒤집는다
-  const paired = asset.background !== null
+  // 캐릭터에 짝 배경이 있거나 GIF 캐릭터면 칸 전체를 꽉 채워 그린다.
+  // 짝 배경은 캐릭터와 함께 뒤집고, GIF는 그린 그대로 두려고 뒤집지 않는다
+  const paired = asset.background !== null || asset.fillsSeat
   const background = asset.background ?? backgroundFor(seatNo)
 
   return (
@@ -104,8 +107,8 @@ export function SeatTile({ seatNo, occupant, isMe, now, offsetMs, compact, chara
     >
       <div className="scene" aria-hidden="true">
         {paired ? (
-          <div className={`paired-stack ${flipped ? 'is-flipped' : ''}`}>
-            <img className="scene-image" src={background!} alt="" draggable={false} />
+          <div className={`paired-stack ${flipped && !asset.fillsSeat ? 'is-flipped' : ''}`}>
+            {background && <MotionImage className="scene-image" src={background} still={asset.stills[background]} />}
             <Character asset={asset} state={state} phase={phase} paired />
           </div>
         ) : (

@@ -127,13 +127,16 @@ export function RoomChoice({ value, onChange, onCodeStatus }: Props) {
   )
 }
 
-function Stepper({
+export function Stepper({
   label,
   hint,
   value,
   min,
   max,
   onChange,
+  step = 1,
+  unit = '명',
+  format = String,
 }: {
   label: string
   hint: string
@@ -141,6 +144,9 @@ function Stepper({
   min: number
   max: number
   onChange: (value: number) => void
+  step?: number
+  unit?: string
+  format?: (value: number) => string
 }) {
   return (
     <div className="room-config-row">
@@ -149,14 +155,14 @@ function Stepper({
         <small className="muted">{hint}</small>
       </span>
       <div className="stepper">
-        <button type="button" onClick={() => onChange(value - 1)} disabled={value <= min} aria-label={`${label} 한 명 줄이기`}>
+        <button type="button" onClick={() => onChange(value - step)} disabled={value <= min} aria-label={`${label} 줄이기`}>
           <Icon name="minus" size={16} />
         </button>
         <output className="stepper-value" aria-label={label}>
-          {value}
+          {format(value)}
         </output>
-        <span className="stepper-unit">명</span>
-        <button type="button" onClick={() => onChange(value + 1)} disabled={value >= max} aria-label={`${label} 한 명 늘리기`}>
+        {unit && <span className="stepper-unit">{unit}</span>}
+        <button type="button" onClick={() => onChange(value + step)} disabled={value >= max} aria-label={`${label} 늘리기`}>
           <Icon name="plus" size={16} />
         </button>
       </div>

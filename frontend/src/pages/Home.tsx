@@ -1,14 +1,16 @@
-import { useEffect, useState, type PointerEvent } from 'react'
+import { useCallback, useEffect, useState, type PointerEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { isApiError } from '../api/client'
-import type { CarriedTask, CarryoverTask, NewTask } from '../api/types'
+import type { CarriedTask, CarryoverTask, NewTask, SprintView } from '../api/types'
 import { DemoRoom } from '../components/DemoRoom'
 import { CharacterModal } from '../components/CharacterModal'
 import { GuideModal } from '../components/GuideModal'
 import { HowItWorks } from '../components/HowItWorks'
 import { IntroPanel } from '../components/IntroPanel'
 import { PlanPanel } from '../components/PlanPanel'
+import { ResumePanel } from '../components/ResumePanel'
+import { ReviewModal } from '../components/ReviewModal'
 import type { RoomChoiceValue } from '../components/RoomChoice'
 import { useToast } from '../components/Toasts'
 import { getGuestId, saveGuestId } from '../lib/guest'
@@ -17,7 +19,8 @@ import { useRoom } from '../room/RoomContext'
 
 /**
  * 첫 화면 = 소개 문구와 스프린트 계획(왼쪽) + 열람실 미리보기(오른쪽), 아래로 이용 순서.
- * 열린 스프린트가 있으면 바로 열람실로 보낸다. 게스트 ID는 처음 입장할 때 발급한다.
+ * 열린 스프린트가 있으면 계획 카드 대신 이어 하기 카드를 보여 주고, 돌아갈지·다른 열람실로 갈지·마무리할지 고르게 한다.
+ * 게스트 ID는 처음 입장할 때 발급한다.
  */
 export function Home() {
   const navigate = useNavigate()
@@ -27,7 +30,10 @@ export function Home() {
   const [params] = useSearchParams()
   const inviteCode = normalizeCode(params.get('code') ?? '').slice(0, CODE_LENGTH) || undefined
   const [carryover, setCarryover] = useState<CarryoverTask[] | null>(() => (getGuestId() ? null : []))
+  // 진행 중인 스프린트. 있으면 계획 대신 이어 하기 카드를 보여 준다
+  const [openSprint, setOpenSprint] = useState<SprintView | null>(null)
   const [entering, setEntering] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
   const [guideOpen, setGuideOpen] = useState(false)
   const [charactersOpen, setCharactersOpen] = useState(false)
 
@@ -37,10 +43,12 @@ export function Home() {
       try {
         const me = await api.me()
         if (me.hasOpenSprint) {
-          // 이미 공부 중인 사람이 초대 링크로 오면 그 방으로 옮긴다
-          if (inviteCode) await joinOrWarn(inviteCode)
-          navigate('/room', { replace: true })
-          return
+          const { sprint } = await api.currentSprint()
+          if (sprint) {
+            setOpenSprint(sprint)
+            setCarryover([])
+            return
+          }
         }
         setCarryover((await api.carryover()).tasks)
       } catch (e) {
@@ -61,16 +69,39 @@ export function Home() {
     }
   }
 
-  const enter = async (tasks: NewTask[], carriedTasks: CarriedTask[], choice: RoomChoiceValue) => {
+  const enter = async (tasks: NewTask[], carriedTasks: CarriedTask[], choice: RoomChoiceValue, sessionMinutes: number) => {
     setEntering(true)
     try {
       if (!getGuestId()) saveGuestId((await api.issueGuest()).guestId)
       try {
-        await api.startSprint(tasks, carriedTasks)
+        await api.startSprint(tasks, carriedTasks, sessionMinutes)
       } catch (e) {
         if (!isApiError(e, 'SPRINT_ALREADY_OPEN')) throw e
       }
       if (choice.mode === 'join') await joinOrWarn(choice.code)
+      else await room.create(choice.config)
+      navigate('/room')
+    } catch (e) {
+      toast.show((e as Error).message, 'error')
+      setEntering(false)
+    }
+  }
+
+  /** 마무리를 확정하면 같은 화면에서 새 계획 카드(이월 할 일 포함)로 바꾼다 */
+  const startFresh = useCallback(() => {
+    setReviewOpen(false)
+    setOpenSprint(null)
+    setCarryover(null)
+    api.carryover()
+      .then(({ tasks }) => setCarryover(tasks))
+      .catch(() => setCarryover([]))
+  }, [])
+
+  /** 이어 하기 카드에서 다른 열람실을 고른 경우. 스프린트는 이미 열려 있다 */
+  const enterOther = async (choice: RoomChoiceValue) => {
+    setEntering(true)
+    try {
+      if (choice.mode === 'join') await room.join(choice.code)
       else await room.create(choice.config)
       navigate('/room')
     } catch (e) {
@@ -116,7 +147,16 @@ export function Home() {
           <div className="hero-inner">
             <div className="hero-copy">
               <IntroPanel />
-              {carryover === null ? (
+              {openSprint ? (
+                <ResumePanel
+                  sprint={openSprint}
+                  inviteCode={inviteCode}
+                  busy={entering}
+                  onResume={() => navigate('/room')}
+                  onEnter={enterOther}
+                  onFinish={() => setReviewOpen(true)}
+                />
+              ) : carryover === null ? (
                 <div className="plan-panel plan-loading" aria-busy="true">
                   오늘 계획을 불러오는 중…
                 </div>
@@ -134,6 +174,7 @@ export function Home() {
       <footer className="home-footer">© 모여봄 · 혼자 공부해도, 함께 있는 것처럼</footer>
       {guideOpen && <GuideModal onClose={() => setGuideOpen(false)} />}
       {charactersOpen && <CharacterModal onClose={() => setCharactersOpen(false)} />}
+      {reviewOpen && <ReviewModal onClose={() => setReviewOpen(false)} onDone={startFresh} />}
     </div>
   )
 }

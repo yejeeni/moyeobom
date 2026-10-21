@@ -2,17 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { isApiError } from '../api/client'
-import type { MyStatus, Task } from '../api/types'
+import type { MyStatus, SprintView, Task } from '../api/types'
 import { useSeatCharacters } from '../character/assignment'
 import { CharacterModal } from '../components/CharacterModal'
 import { GuideModal } from '../components/GuideModal'
+import { Modal } from '../components/Modal'
+import { ReviewModal } from '../components/ReviewModal'
 import { Icon, type IconName } from '../components/Icon'
 import { SeatTile } from '../components/SeatTile'
 import { SettingsModal } from '../components/SettingsModal'
 import { TaskPanel } from '../components/TaskPanel'
 import { useToast } from '../components/Toasts'
 import { getGuestId } from '../lib/guest'
-import { STATE_LABEL, elapsedSeconds, formatClock, useNow } from '../lib/time'
+import { STATE_LABEL, elapsedSeconds, formatClock, formatDuration, shownState, useNow } from '../lib/time'
+import { EXTEND_MINUTES, PLANNED_MAX, markPrompted, wasPrompted } from '../lib/timebox'
 import type { RoomChoiceValue } from '../components/RoomChoice'
 import { setRoomConfig, useTileLayout } from '../lib/roomSize'
 import { useMediaQuery } from '../lib/useMediaQuery'
@@ -26,6 +29,8 @@ export function Room() {
   const now = useNow()
   const compact = useMediaQuery('(max-width: 760px)')
   const [tasks, setTasks] = useState<Task[]>([])
+  // 타임박스(오늘 공부할 시간). 없이 시작한 스프린트면 plannedMinutes가 null
+  const [plan, setPlan] = useState<Pick<SprintView, 'plannedMinutes' | 'endsAt'>>({ plannedMinutes: null, endsAt: null })
   const [myStatus, setMyStatus] = useState<MyStatus | null>(null)
   const [statusOffset, setStatusOffset] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -34,7 +39,7 @@ export function Room() {
   const [panelCompact, setPanelCompact] = useState(false)
   const panelOpen = compact ? panelCompact : panelWide
   const setPanelOpen = compact ? setPanelCompact : setPanelWide
-  const [modal, setModal] = useState<'guide' | 'settings' | 'characters' | null>(null)
+  const [modal, setModal] = useState<'guide' | 'settings' | 'characters' | 'timebox' | 'review' | null>(null)
   const gridRef = useRef<HTMLElement>(null)
   const layout = useTileLayout(gridRef, room.seatCount, compact ? 4 : 6)
   const tileGap = compact ? 4 : 6
@@ -59,6 +64,7 @@ export function Room() {
       return
     }
     setTasks(sprint.tasks)
+    setPlan({ plannedMinutes: sprint.plannedMinutes, endsAt: sprint.endsAt })
   }, [navigate])
 
   const loadAll = useCallback(async () => {
@@ -140,7 +146,7 @@ export function Room() {
     }
   }
 
-  // 대기·휴식 중에는 아래 툴바 가운데 버튼으로 다음 할 일을 바로 시작한다
+  // 휴식 중(대기 포함)에는 아래 툴바 가운데 버튼으로 다음 할 일을 바로 시작한다
   const nextTask = tasks.find((t) => t.status === 'TODO') ?? null
   const startNext = () => {
     if (nextTask) {
@@ -174,10 +180,33 @@ export function Room() {
     }
   }
 
+  const goHome = useCallback(() => navigate('/', { replace: true }), [navigate])
+
   const finishToday = () =>
     run(async () => {
+      // 회고는 끝난 세션만 집계하므로 집중 중이면 먼저 멈춘다
       if (myStatus?.state === 'FOCUS') applyStatus(await api.stopFocus('STOPPED'))
-      navigate('/review')
+      setModal('review')
+    })
+
+  // 남은 시간(초). 서버 시각 기준이며 다 되면 0 아래로 내려간다
+  const remaining = plan.endsAt ? Math.floor((Date.parse(plan.endsAt) - (now + room.offsetMs)) / 1000) : null
+  const timeUp = remaining !== null && remaining <= 0
+
+  // 시간이 다 되면 한 번만 마무리할지 묻는다. 강제로 끝내지 않는다
+  useEffect(() => {
+    if (!timeUp || !plan.endsAt || wasPrompted(plan.endsAt) || modal) return
+    markPrompted(plan.endsAt)
+    setModal('timebox')
+  }, [timeUp, plan.endsAt, modal])
+
+  const extend = () =>
+    run(async () => {
+      const planned = Math.min(PLANNED_MAX, (plan.plannedMinutes ?? 0) + EXTEND_MINUTES)
+      const { sprint } = await api.changePlan(planned)
+      setPlan({ plannedMinutes: sprint.plannedMinutes, endsAt: sprint.endsAt })
+      setModal(null)
+      toast.show(`${EXTEND_MINUTES}분 더 공부해요`)
     })
 
   const state = myStatus?.state ?? 'IDLE'
@@ -209,15 +238,20 @@ export function Room() {
               {occupied}명 중 <strong>{focusing}명</strong> 집중 중
             </span>
           )}
+          {remaining !== null && (
+            <span className={`timebox-chip ${timeUp ? 'is-over' : ''}`} title={`오늘 공부할 시간 ${formatDuration((plan.plannedMinutes ?? 0) * 60)}`}>
+              {timeUp ? '계획한 시간이 끝났어요' : `남은 시간 ${formatClock(remaining)}`}
+            </span>
+          )}
         </div>
-        <div className={`topbar-timer timer-${state.toLowerCase()}`} aria-live="off">
+        <div className={`topbar-timer timer-${shownState(state).toLowerCase()}`} aria-live="off">
           {state === 'IDLE' ? (
             <div className="timer-prompt">할 일을 골라 집중을 시작해요</div>
           ) : (
             <div className="timer-value">{formatClock(myElapsed)}</div>
           )}
           <div className="timer-caption">
-            <span className={`my-state chip-${state.toLowerCase()}`}>
+            <span className={`my-state chip-${shownState(state).toLowerCase()}`}>
               <span className="dot" aria-hidden="true" />
               {STATE_LABEL[state]}
             </span>
@@ -301,8 +335,7 @@ export function Room() {
         <div className="toolbar-group toolbar-center">
           {state === 'FOCUS' ? (
             <>
-              <ToolButton icon="coffee" label="휴식" disabled={busy} onClick={() => stop('BREAK')} />
-              <ToolButton icon="stop" label="중단" disabled={busy} onClick={() => stop('STOPPED')} />
+              <ToolButton icon="coffee" label="쉬기" disabled={busy} onClick={() => stop('BREAK')} />
               <ToolButton
                 icon="check"
                 label="완료"
@@ -338,6 +371,34 @@ export function Room() {
         />
       )}
       {modal === 'characters' && <CharacterModal onClose={() => setModal(null)} />}
+      {modal === 'review' && <ReviewModal onClose={() => setModal(null)} onDone={goHome} />}
+      {modal === 'timebox' && (
+        <Modal title="계획한 시간이 끝났어요" onClose={() => setModal(null)} className="modal-wide timebox-modal">
+          <p className="lead">
+            오늘 공부하기로 한 {formatDuration((plan.plannedMinutes ?? 0) * 60)}이 지났어요. 여기서 마무리하고 돌아볼까요?
+          </p>
+          <div className="modal-actions is-row">
+            <button className="button" onClick={() => setModal(null)}>
+              조금 더 할게요
+            </button>
+            {(plan.plannedMinutes ?? PLANNED_MAX) < PLANNED_MAX && (
+              <button className="button" onClick={extend} disabled={busy}>
+                {EXTEND_MINUTES}분 더
+              </button>
+            )}
+            <button
+              className="button primary"
+              onClick={() => {
+                setModal(null)
+                finishToday()
+              }}
+              disabled={busy}
+            >
+              오늘 마무리
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

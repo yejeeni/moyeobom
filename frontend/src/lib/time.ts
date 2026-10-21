@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { SeatState } from '../api/types'
 
 /** 1초마다 다시 그리기 위한 현재 시각 */
 export function useNow(intervalMs = 1000): number {
@@ -48,4 +49,12 @@ export function formatDiff(diffSeconds: number): string {
   return minutes > 0 ? `+${minutes}분 더 걸렸어요` : `${-minutes}분 빨랐어요`
 }
 
-export const STATE_LABEL = { FOCUS: '집중', BREAK: '휴식', IDLE: '대기' } as const
+export const STATE_LABEL = { FOCUS: '집중', BREAK: '휴식', IDLE: '휴식' } as const
+
+/**
+ * 화면에 보여 줄 상태. 서버는 대기(IDLE)와 휴식(BREAK)을 나눠 기록하지만,
+ * 둘 다 집중하지 않는 상태라 화면과 캐릭터 그림은 휴식 하나로 보여 준다.
+ */
+export function shownState(state: SeatState): 'FOCUS' | 'BREAK' {
+  return state === 'FOCUS' ? 'FOCUS' : 'BREAK'
+}

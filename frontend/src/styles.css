@@ -501,6 +501,46 @@ input[aria-invalid='true'] {
   border-radius: 16px;
   box-shadow: 0 12px 32px rgba(255, 207, 122, 0.22);
 }
+/* 계획 카드의 공부할 시간 */
+.plan-session {
+  display: grid;
+  gap: 6px;
+}
+.plan-session-note {
+  margin: 0;
+}
+/* "2시간 30분"까지 한 줄로 보이도록 숫자 칸을 넓힌다 */
+.plan-session .stepper-value {
+  min-width: 6.2em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* 이어 하기 카드: 진행 중인 스프린트가 있을 때 계획 카드 자리에 놓인다 */
+.resume-room,
+.resume-choose {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+}
+.resume-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.resume-actions .enter-button {
+  margin-top: 0;
+}
+.resume-choose p {
+  margin: 0;
+}
+.resume-finish {
+  justify-self: center;
+}
 .enter-button:disabled {
   opacity: 1;
   background: rgba(255, 255, 255, 0.07);
@@ -891,6 +931,15 @@ input[aria-invalid='true'] {
   padding: 10px 8px;
   border-bottom: 1px solid var(--line);
 }
+/* 제목 칸만 줄바꿈하고 시간 칸은 한 줄로 */
+.review-table th,
+.review-table td:not(:first-child) {
+  white-space: nowrap;
+}
+.review-table td:first-child {
+  width: 100%;
+  word-break: break-all;
+}
 .review-table th {
   color: var(--text-muted);
   font-weight: 500;
@@ -908,6 +957,7 @@ input[aria-invalid='true'] {
   padding: 6px 14px;
   cursor: pointer;
   font-size: 0.88rem;
+  white-space: nowrap;
 }
 .segmented label.selected {
   background: var(--lamp);
@@ -922,10 +972,138 @@ input[aria-invalid='true'] {
 .segmented label:focus-within {
   outline: 2px solid var(--lamp);
 }
+/* 모니터에서 쓰는 서비스라 모달은 가로로 넓게 두고 내용을 두 칸으로 나눈다. 좁은 창에서는 한 칸으로 */
+.modal.modal-wide {
+  width: min(880px, 100%);
+}
+.modal.modal-xl {
+  width: min(1040px, 100%);
+}
+.modal-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.modal-column {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-width: 0;
+}
+.modal-wide .modal-actions.is-row,
+.modal-wide > .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.modal-wide .modal-actions .button {
+  min-width: 140px;
+}
+.modal-wide .modal-cta {
+  width: auto;
+  min-width: 200px;
+  justify-self: end;
+}
+.modal-wide .guide-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+/* 내 캐릭터: 오른쪽 목록만 스크롤 */
+.character-columns {
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+}
+.character-list-column {
+  max-height: calc(90vh - 120px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+/* 타임박스 안내는 짧아서 조금 좁게 */
+.modal.timebox-modal {
+  width: min(640px, 100%);
+}
+/* 오늘 마무리: 왼쪽 요약 세로로, 오른쪽 표와 이월 */
+.modal.review-modal {
+  width: min(1040px, 100%);
+}
+.review-columns {
+  grid-template-columns: minmax(220px, 3fr) minmax(0, 7fr);
+}
+.review-columns .summary {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+}
+@media (max-width: 760px) {
+  .modal-columns,
+  .character-columns,
+  .review-columns,
+  .modal-wide .guide-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .character-list-column {
+    max-height: none;
+    overflow: visible;
+  }
+}
+.review-section-title {
+  font-size: 0.95rem;
+  margin: 0 0 8px;
+}
 .review-done {
+  display: grid;
+  gap: 10px;
   text-align: center;
   justify-items: center;
-  padding-top: 15vh;
+  padding: 8px 0 4px;
+}
+.review-done p {
+  margin: 0;
+}
+/* 확정하면 스탠드가 '띠롱' 켜지듯 떠오른다 */
+.review-modal.is-done .done-lamp {
+  animation: done-pop 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.review-modal.is-done .refresh-message {
+  animation: done-rise 0.5s 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes done-pop {
+  from {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes done-rise {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+/* 첫 화면으로 넘어가기까지 남은 시간 */
+.done-progress {
+  width: 160px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--lamp);
+  transform-origin: left;
+  animation-name: done-countdown;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+@keyframes done-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
 }
 .done-lamp {
   width: 96px;
@@ -991,6 +1169,22 @@ input[aria-invalid='true'] {
 }
 .focus-count strong {
   color: var(--focus);
+}
+/* 타임박스 남은 시간. 다 되면 스탠드 불빛 색으로 바뀐다 */
+.timebox-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.timebox-chip.is-over {
+  background: rgba(255, 207, 122, 0.14);
+  color: var(--lamp);
 }
 .topbar-timer {
   display: grid;
@@ -1316,7 +1510,7 @@ input[aria-invalid='true'] {
 .character-flipped {
   transform: scaleX(-1);
 }
-/* 여섯 장을 겹쳐 두고 지금 상태의 A·B만 보인다. B가 보일 때는 A를 숨긴다 */
+/* 모든 상태의 그림을 겹쳐 두고 지금 그림 한 장만 보인다 */
 .character .frame {
   position: absolute;
   inset: 0;
@@ -1326,81 +1520,9 @@ input[aria-invalid='true'] {
   user-select: none;
   pointer-events: none;
 }
-.character-focus .frame-focus.frame-a,
-.character-break .frame-break.frame-a,
-.character-idle .frame-idle.frame-a {
+/* 넘기는 순서와 빠르기는 Character.tsx가 정하고, 여기서는 지금 그림만 보이게 한다 */
+.character .frame.is-current {
   opacity: 1;
-}
-/* 집중: 빠르게 바꾸고 사이사이 잠깐 멈춘다 */
-.character-focus .frame-focus.frame-a {
-  animation: focus-a 2.4s step-end var(--phase) infinite;
-}
-.character-focus .frame-focus.frame-b {
-  animation: focus-b 2.4s step-end var(--phase) infinite;
-}
-.tempo-writing.character-focus .frame-focus {
-  animation-duration: 4s;
-}
-/* 휴식: 숨 쉬듯 느리게, 대기: 그 사이 빠르기로 반씩 번갈아 */
-.character-break .frame-break.frame-a,
-.character-idle .frame-idle.frame-a {
-  animation: swap-a 3.2s step-end var(--phase) infinite;
-}
-.character-break .frame-break.frame-b,
-.character-idle .frame-idle.frame-b {
-  animation: swap-b 3.2s step-end var(--phase) infinite;
-}
-.character-idle .frame-idle.frame-a,
-.character-idle .frame-idle.frame-b {
-  animation-duration: 2.2s;
-}
-@keyframes focus-b {
-  0%,
-  16%,
-  32%,
-  48%,
-  80% {
-    opacity: 1;
-  }
-  8%,
-  24%,
-  40%,
-  56%,
-  88% {
-    opacity: 0;
-  }
-}
-@keyframes focus-a {
-  0%,
-  16%,
-  32%,
-  48%,
-  80% {
-    opacity: 0;
-  }
-  8%,
-  24%,
-  40%,
-  56%,
-  88% {
-    opacity: 1;
-  }
-}
-@keyframes swap-a {
-  0% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
-}
-@keyframes swap-b {
-  0% {
-    opacity: 0;
-  }
-  50% {
-    opacity: 1;
-  }
 }
 
 /* 칸 위 글자: 줌의 이름표처럼 반투명 알약 */
@@ -1889,6 +2011,7 @@ input[aria-invalid='true'] {
   min-height: 52px;
 }
 .is-compact .topbar-right,
+.is-compact .timebox-chip,
 .is-compact .focus-count {
   display: none;
 }
@@ -1961,6 +2084,7 @@ input[aria-invalid='true'] {
   background: rgba(5, 4, 8, 0.6);
   backdrop-filter: blur(6px);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: 16px;
   z-index: 20;
@@ -2394,6 +2518,7 @@ input[aria-invalid='true'] {
 .character-card-body {
   padding: 8px 10px 10px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
 }
 .character-card-title {
@@ -2422,6 +2547,7 @@ input[aria-invalid='true'] {
 }
 .character-card-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
 }
@@ -2448,16 +2574,23 @@ input[aria-invalid='true'] {
 .icon-toggle.is-on .icon path {
   fill: currentColor;
 }
-.tempo-select {
+/* 내 캐릭터의 한 장당 시간 */
+/* 별·지우기 버튼 아래 한 줄을 다 쓴다 */
+.frame-ms {
+  order: 1;
+  flex: 1 1 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.frame-ms input {
   flex: 1;
   min-width: 0;
-  height: 30px;
-  padding: 0 6px;
-  border-radius: 9px;
-  border: 1px solid var(--line);
-  background: #13111a;
-  color: var(--text);
-  font-size: 0.75rem;
+  accent-color: var(--lamp);
 }
 .setting-link {
   width: 100%;

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } 
 import type { CarriedTask, CarryoverTask, NewTask } from '../api/types'
 import { getRoomConfig, setRoomConfig } from '../lib/roomSize'
 import { formatDuration } from '../lib/time'
-import { RoomChoice, type CodeStatus, type RoomChoiceValue } from './RoomChoice'
+import { PLANNED_MAX, PLANNED_MIN, PLANNED_STEP, getPlannedMinutes, setPlannedMinutes } from '../lib/timebox'
+import { RoomChoice, Stepper, type CodeStatus, type RoomChoiceValue } from './RoomChoice'
 
 interface CarryDraft extends CarryoverTask {
   included: boolean
@@ -12,7 +13,8 @@ interface CarryDraft extends CarryoverTask {
 interface Props {
   carryover: CarryoverTask[]
   entering: boolean
-  onEnter: (tasks: NewTask[], carriedTasks: CarriedTask[], room: RoomChoiceValue) => void
+  /** sessionMinutes: 오늘 공부할 시간(타임박스, 분) */
+  onEnter: (tasks: NewTask[], carriedTasks: CarriedTask[], room: RoomChoiceValue, sessionMinutes: number) => void
   /** 초대 링크로 왔을 때 미리 채울 코드 */
   initialCode?: string
 }
@@ -39,6 +41,11 @@ export function PlanPanel({ carryover, entering, onEnter, initialCode }: Props) 
   }
   const onCodeStatus = useCallback((status: CodeStatus) => setCodeStatus(status), [])
   const canEnterRoom = room.mode === 'create' || codeStatus.kind === 'ready'
+  const [sessionMinutes, setSessionMinutes] = useState(getPlannedMinutes)
+  const changeSession = (minutes: number) => {
+    setSessionMinutes(minutes)
+    setPlannedMinutes(minutes)
+  }
   const [title, setTitle] = useState('')
   const [minutes, setMinutes] = useState('')
   const [example, setExample] = useState(0)
@@ -71,6 +78,7 @@ export function PlanPanel({ carryover, entering, onEnter, initialCode }: Props) 
       tasks,
       included.map((t) => ({ fromTaskId: t.taskId, estimatedMinutes: t.minutes ? Number(t.minutes) : null })),
       room,
+      sessionMinutes,
     )
 
   return (
@@ -164,6 +172,25 @@ export function PlanPanel({ carryover, entering, onEnter, initialCode }: Props) 
       ) : (
         total === 0 && <p className="empty">오늘 할 일 하나만 적어볼까요?</p>
       )}
+
+      <div className="plan-session">
+        <Stepper
+          label="공부할 시간"
+          hint="시간이 다 되면 마무리할지 물어봐요"
+          value={sessionMinutes}
+          min={PLANNED_MIN}
+          max={PLANNED_MAX}
+          step={PLANNED_STEP}
+          unit=""
+          format={(m) => formatDuration(m * 60)}
+          onChange={changeSession}
+        />
+        {plannedMinutes > sessionMinutes && (
+          <p className="muted small plan-session-note">
+            할 일 예상 합계({formatDuration(plannedMinutes * 60)})가 공부할 시간보다 길어요. 다 못 해도 괜찮아요, 회고에서 비교해 봐요
+          </p>
+        )}
+      </div>
 
       <RoomChoice value={room} onChange={changeRoom} onCodeStatus={onCodeStatus} />
 

@@ -26,7 +26,7 @@ const ITEMS: { icon: IconName; title: string; body: string }[] = [
 
 export function GuideModal({ onClose }: { onClose: () => void }) {
   return (
-    <Modal title="모여봄 열람실 안내" onClose={onClose}>
+    <Modal title="모여봄 열람실 안내" onClose={onClose} className="modal-wide">
       <ul className="guide-list">
         {ITEMS.map((item) => (
           <li key={item.title}>

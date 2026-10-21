@@ -30,6 +30,10 @@ export interface Task {
 export interface SprintView {
   sprintId: number
   startedAt: string
+  /** 오늘 공부할 시간(분). 타임박스 없이 시작했으면 null */
+  plannedMinutes: number | null
+  /** 타임박스가 끝나는 시각 */
+  endsAt: string | null
   tasks: Task[]
 }
 
@@ -135,6 +139,8 @@ export interface ReviewTask {
 
 export interface Review {
   sprintId: number
+  /** 계획한 공부 시간(초). 타임박스 없이 시작했으면 null */
+  plannedSeconds: number | null
   totalFocusSeconds: number
   completedCount: number
   estimatedSecondsOfDone: number

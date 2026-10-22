@@ -17,6 +17,25 @@ export function setAlertSound(on: boolean) {
   }
 }
 
+// 새 열람실을 만들 때 쓸 메이트 계속 집중. 마지막으로 고른 값을 기억한다
+const ALWAYS_FOCUS_KEY = 'moyeobom.matesAlwaysFocus'
+
+export function isMatesAlwaysFocus(): boolean {
+  try {
+    return localStorage.getItem(ALWAYS_FOCUS_KEY) === 'on'
+  } catch {
+    return false
+  }
+}
+
+export function setMatesAlwaysFocus(on: boolean) {
+  try {
+    localStorage.setItem(ALWAYS_FOCUS_KEY, on ? 'on' : 'off')
+  } catch {
+    // 무시
+  }
+}
+
 /** 짧고 부드러운 차임. 파일 없이 브라우저에서 만든다. */
 export function playChime() {
   try {

@@ -3,6 +3,7 @@ package com.moyeobom.room;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -127,6 +128,74 @@ class RoomWebSocketTest extends IntegrationTestSupport {
         String third = issueGuest();
         startSprint(third);
         join(third, code).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ROOM_FULL"));
+    }
+
+    @Test
+    void 만들_때_메이트_계속_집중을_고르면_처음부터_쉬는_메이트가_없다() throws Exception {
+        startSprint(guest);
+        Map<String, Object> room = new Result(mockMvc.perform(post("/api/v1/rooms").header("X-Guest-Id", guest)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"virtualSeats\": 8, \"realSeats\": 1, \"matesAlwaysFocus\": true}")))
+                .andExpect(status().isCreated()).andReturnMap();
+        assertThat(room.get("matesAlwaysFocus")).isEqualTo(true);
+        assertThat(room.get("owner")).isEqualTo(true);
+
+        Map<String, Object> snapshot = poll(subscribe(connect(guest), "/user/queue/room-snapshot"), e -> true);
+        assertThat((Boolean) JsonPath.read(snapshot, "$.payload.matesAlwaysFocus")).isTrue();
+        assertThat((Integer) JsonPath.read(snapshot, "$.payload.ownerSeatNo")).isEqualTo(room.get("seatNo"));
+        List<String> states = JsonPath.read(snapshot, "$.payload.seats[?(@.seatNo != %d)].occupant.state"
+                .formatted((Integer) room.get("seatNo")));
+        assertThat(states).isNotEmpty().allMatch("FOCUS"::equals);
+    }
+
+    @Test
+    void 같이_쓰는_방에서는_만든_사람만_메이트_계속_집중을_바꾸고_모두에게_알린다() throws Exception {
+        startSprint(guest);
+        Map<String, Object> room = created(guest, 3, 2);
+        assertThat(room.get("matesAlwaysFocus")).isEqualTo(false);
+        String friend = issueGuest();
+        startSprint(friend);
+        Map<String, Object> joined = join(friend, (String) room.get("code")).andReturnMap();
+        assertThat(joined.get("owner")).isEqualTo(false);
+        BlockingQueue<Map<String, Object>> friendTopic =
+                subscribe(connect(friend), "/topic/rooms/" + room.get("roomId"));
+
+        changeSettings(friend, true)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("NOT_ROOM_OWNER"));
+
+        changeSettings(guest, true)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.matesAlwaysFocus").value(true))
+                .andExpect(jsonPath("$.ownerSeatNo").value(room.get("seatNo")));
+        Map<String, Object> changed = poll(friendTopic, e -> "ROOM_SETTINGS_CHANGED".equals(e.get("type")));
+        assertThat((Boolean) JsonPath.read(changed, "$.payload.matesAlwaysFocus")).isTrue();
+        assertThat(current(friend).get("matesAlwaysFocus")).isEqualTo(true);
+    }
+
+    @Test
+    void 방을_만든_사람이_나가면_남은_사람이_이어받아_바꿀_수_있다() throws Exception {
+        startSprint(guest);
+        Map<String, Object> room = created(guest, 0, 2);
+        String friend = issueGuest();
+        startSprint(friend);
+        Map<String, Object> joined = join(friend, (String) room.get("code")).andReturnMap();
+        BlockingQueue<Map<String, Object>> friendTopic =
+                subscribe(connect(friend), "/topic/rooms/" + room.get("roomId"));
+
+        mockMvc.perform(post("/api/v1/rooms/leave").header("X-Guest-Id", guest)).andExpect(status().isNoContent());
+
+        Map<String, Object> handedOver = poll(friendTopic, e -> "ROOM_SETTINGS_CHANGED".equals(e.get("type")));
+        assertThat((Integer) JsonPath.read(handedOver, "$.payload.ownerSeatNo")).isEqualTo(joined.get("seatNo"));
+        assertThat(current(friend).get("owner")).isEqualTo(true);
+        changeSettings(friend, true).andExpect(status().isOk());
+    }
+
+    @Test
+    void 방에_없으면_설정을_바꿀_수_없다() throws Exception {
+        changeSettings(guest, true)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ROOM_NOT_FOUND"));
     }
 
     @Test
@@ -263,6 +332,12 @@ class RoomWebSocketTest extends IntegrationTestSupport {
     private Result join(String guestId, String code) throws Exception {
         return new Result(mockMvc.perform(post("/api/v1/rooms/join").header("X-Guest-Id", guestId)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"code\": \"" + code + "\"}")));
+    }
+
+    private Result changeSettings(String guestId, boolean matesAlwaysFocus) throws Exception {
+        return new Result(mockMvc.perform(patch("/api/v1/rooms/current/settings").header("X-Guest-Id", guestId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"matesAlwaysFocus\": " + matesAlwaysFocus + "}")));
     }
 
     private Map<String, Object> current(String guestId) throws Exception {

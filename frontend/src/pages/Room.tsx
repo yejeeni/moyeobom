@@ -5,6 +5,7 @@ import { isApiError } from '../api/client'
 import type { MyStatus, SprintView, Task } from '../api/types'
 import { useSeatCharacters } from '../character/assignment'
 import { CharacterModal } from '../components/CharacterModal'
+import { CharacterPickerModal } from '../components/CharacterPickerModal'
 import { GuideModal } from '../components/GuideModal'
 import { Modal } from '../components/Modal'
 import { ReviewModal } from '../components/ReviewModal'
@@ -40,6 +41,8 @@ export function Room() {
   const panelOpen = compact ? panelCompact : panelWide
   const setPanelOpen = compact ? setPanelCompact : setPanelWide
   const [modal, setModal] = useState<'guide' | 'settings' | 'characters' | 'timebox' | 'review' | null>(null)
+  // 캐릭터를 고르는 중인 자리 번호
+  const [pickingSeat, setPickingSeat] = useState<number | null>(null)
   const gridRef = useRef<HTMLElement>(null)
   const layout = useTileLayout(gridRef, room.seatCount, compact ? 4 : 6)
   const tileGap = compact ? 4 : 6
@@ -216,7 +219,8 @@ export function Room() {
   )
   const myElapsed = state === 'IDLE' ? 0 : elapsedSeconds(myStatus?.since, now, statusOffset)
 
-  const seatCharacters = useSeatCharacters(room.roomId, room.seats, room.mySeatNo)
+  const { bySeat: seatCharacters, pick: pickCharacter } = useSeatCharacters(room.roomId, room.seats, room.mySeatNo)
+  const pickingOccupant = pickingSeat !== null ? room.seats[pickingSeat] : null
   const SEAT_NUMBERS = Array.from({ length: room.seatCount }, (_, i) => i + 1)
   const occupied = SEAT_NUMBERS.filter((n) => room.seats[n]).length
   const focusing = SEAT_NUMBERS.filter((n) => room.seats[n]?.state === 'FOCUS').length
@@ -298,6 +302,7 @@ export function Room() {
                     waiting={Boolean(room.waiting[n])}
                     code={room.code}
                     onInvite={copyInvite}
+                    onPickCharacter={() => setPickingSeat(n)}
                   />
                 ))
               : SEAT_NUMBERS.map((n) => (
@@ -371,6 +376,18 @@ export function Room() {
         />
       )}
       {modal === 'characters' && <CharacterModal onClose={() => setModal(null)} />}
+      {pickingSeat !== null && pickingOccupant && (
+        <CharacterPickerModal
+          seatName={pickingSeat === room.mySeatNo ? '내 자리' : pickingOccupant.nickname}
+          isMe={pickingSeat === room.mySeatNo}
+          currentId={seatCharacters[pickingSeat]?.id ?? null}
+          onPick={(id) => {
+            pickCharacter(pickingSeat, id)
+            setPickingSeat(null)
+          }}
+          onClose={() => setPickingSeat(null)}
+        />
+      )}
       {modal === 'review' && <ReviewModal onClose={() => setModal(null)} onDone={goHome} />}
       {modal === 'timebox' && (
         <Modal title="계획한 시간이 끝났어요" onClose={() => setModal(null)} className="modal-wide timebox-modal">

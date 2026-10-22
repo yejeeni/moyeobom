@@ -75,6 +75,17 @@ export interface RoomEnter {
   realSeatCount: number
   seatNo: number
   nickname: string
+  /** 가상 메이트가 쉬지 않고 자리를 뜨지도 않는다 */
+  matesAlwaysFocus: boolean
+  /** 내가 방 주인(설정을 바꿀 수 있는 사람)인지 */
+  owner: boolean
+}
+
+/** 방 설정. 방 주인만 바꿀 수 있다 */
+export interface RoomSettings {
+  matesAlwaysFocus: boolean
+  /** 방 주인의 자리 번호 */
+  ownerSeatNo: number
 }
 
 export interface CharacterParts {
@@ -99,6 +110,7 @@ export type RoomEventType =
   | 'SEAT_LEFT'
   | 'STATE_CHANGED'
   | 'COUNTS_CHANGED'
+  | 'ROOM_SETTINGS_CHANGED'
   | 'BREAK_ALERT'
   | 'ROOM_NOT_FOUND'
 
@@ -125,6 +137,8 @@ export interface SnapshotPayload {
   mySeatNo: number
   /** waiting: 비어 있는 실제 사람 자리(초대 대기) */
   seats: { seatNo: number; occupant: Occupant | null; waiting: boolean }[]
+  matesAlwaysFocus: boolean
+  ownerSeatNo: number
 }
 
 export interface ReviewTask {

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
-import { isAlertSoundOn, playChime, setAlertSound } from '../lib/preferences'
+import { isAlertSoundOn, playChime, setAlertSound, setMatesAlwaysFocus } from '../lib/preferences'
 import type { RoomConfig } from '../lib/roomSize'
 import { Icon } from './Icon'
 import { Modal } from './Modal'
 import { RoomChoice, type CodeStatus, type RoomChoiceValue } from './RoomChoice'
 import { useToast } from './Toasts'
+import { useRoom } from '../room/RoomContext'
 
 interface Props {
   onClose: () => void
@@ -19,6 +20,11 @@ interface Props {
 
 export function SettingsModal({ onClose, onOpenCharacters, roomConfig, onRoomChange }: Props) {
   const toast = useToast()
+  const room = useRoom()
+  const inRoom = room.roomId !== null
+  // 같이 쓰는 방에서는 방을 만든 사람(방 주인)만 바꿀 수 있다
+  const canChangeMates = !inRoom || room.ownerSeatNo === room.mySeatNo
+  const [alwaysFocus, setAlwaysFocus] = useState(room.matesAlwaysFocus)
   const [enabled, setEnabled] = useState(false)
   const [minutes, setMinutes] = useState('50')
   const [sound, setSound] = useState(isAlertSoundOn())
@@ -56,6 +62,11 @@ export function SettingsModal({ onClose, onOpenCharacters, roomConfig, onRoomCha
     try {
       await api.updateSetting({ breakAlertEnabled: enabled, breakAlertMinutes: minutesValue })
       setAlertSound(sound)
+      if (canChangeMates) {
+        // 새 방을 만들면 이 값으로 만들고, 지금 방에 남으면 지금 방에 바로 적용한다
+        setMatesAlwaysFocus(alwaysFocus)
+        if (inRoom && !roomChanged && alwaysFocus !== room.matesAlwaysFocus) await room.changeMatesAlwaysFocus(alwaysFocus)
+      }
       if (roomChanged && roomChoice && onRoomChange) {
         await onRoomChange(roomChoice)
       } else {
@@ -132,6 +143,32 @@ export function SettingsModal({ onClose, onOpenCharacters, roomConfig, onRoomCha
                 미리 듣기
               </button>
             </div>
+          </div>
+
+          <div className="setting-group">
+            <label className={`setting-row ${canChangeMates ? '' : 'is-disabled'}`}>
+              <span className="setting-icon">
+                <Icon name="users" size={18} />
+              </span>
+              <span className="setting-text">
+                <strong>메이트 계속 집중</strong>
+                <small>
+                  {!canChangeMates
+                    ? '방을 만든 사람만 바꿀 수 있어요'
+                    : room.realSeatCount > 1
+                      ? '메이트가 쉬지 않고 자리도 뜨지 않아요. 같은 방 모두에게 적용돼요'
+                      : '메이트가 쉬지 않고 자리도 뜨지 않아요'}
+                </small>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                className="switch"
+                checked={canChangeMates ? alwaysFocus : room.matesAlwaysFocus}
+                disabled={!canChangeMates}
+                onChange={(e) => setAlwaysFocus(e.target.checked)}
+              />
+            </label>
           </div>
         </div>
 

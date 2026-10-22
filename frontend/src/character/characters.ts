@@ -9,7 +9,8 @@ import type { CharacterParts, SeatState } from '../api/types'
  * - idle-1,  idle-2, …   예전 대기 그림. 휴식 그림이 없을 때 휴식 그림으로 쓴다.
  *   예전 이름 focus-a, focus-b도 1, 2번으로 받는다. 상태마다 MAX_FRAMES장까지.
  * - focus, break, idle  (여러 장 대신) 움짤 한 장. GIF, 움직이는 WebP, APNG를 그대로 재생한다.
- *   GIF가 하나라도 있는 캐릭터는 칸 전체를 꽉 채워 그린다(fillsSeat).
+ *   GIF나 JPG가 하나라도 있는 캐릭터는 칸 전체를 꽉 채워 그린다(fillsSeat).
+ * - 폴더에 그림이 한 장뿐이면 이름과 상관없이 집중·휴식 모두 그 그림을 쓴다.
  * - background        (선택) 책상까지 포함한 칸 전체 배경. 캐릭터와 같은 800x600 캔버스에 맞춰 그린다. 움짤도 된다.
  *
  * 그림은 800x600 투명 PNG이고 같은 위치 기준으로 그린다.
@@ -49,6 +50,11 @@ export interface CharacterAsset {
   stills: Record<string, string>
   /** GIF가 들어 있는 캐릭터. 투명하든 아니든 칸 전체를 꽉 채워 그린다(장면째 그린 움짤이 많아서) */
   fillsSeat: boolean
+}
+
+/** 칸을 꽉 채워 그릴 그림 형식. GIF는 장면째 그린 움짤이 많고, JPG는 투명한 곳이 없어서 */
+export function fillsSeatType(type: string): boolean {
+  return type === 'image/gif' || type === 'image/jpeg'
 }
 
 /** 파일 이름(확장자 뺀)이 어느 상태의 몇 번째 그림인지. 움짤 한 장(focus 등)은 order 0 */

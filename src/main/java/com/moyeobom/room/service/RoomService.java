@@ -21,6 +21,7 @@ import com.moyeobom.room.dto.RoomDtos.RoomEnterResponse;
 import com.moyeobom.room.dto.RoomDtos.RoomEvent;
 import com.moyeobom.room.dto.RoomDtos.RoomEventType;
 import com.moyeobom.room.dto.RoomDtos.RoomLookupResponse;
+import com.moyeobom.room.dto.RoomDtos.RoomSettingsView;
 import com.moyeobom.room.dto.RoomDtos.SeatLeftPayload;
 import com.moyeobom.room.dto.RoomDtos.SeatView;
 import com.moyeobom.room.dto.RoomDtos.SnapshotPayload;
@@ -84,7 +85,7 @@ public class RoomService {
     /**
      * 새 열람실을 만들고 들어간다. 이미 다른 방에 있으면 그 방에서 먼저 나온다.
      */
-    public RoomEnterResponse create(Long guestId, int virtualSeats, int realSeats) {
+    public RoomEnterResponse create(Long guestId, int virtualSeats, int realSeats, boolean matesAlwaysFocus) {
         int total = virtualSeats + realSeats;
         if (realSeats < 1 || virtualSeats < 0 || total > Room.MAX_SEAT_COUNT) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "실제 자리는 1명 이상, 합계는 9명까지 고를 수 있어요.");
@@ -100,6 +101,8 @@ public class RoomService {
             room = Room.create(newRoomId(), newCode(), virtualSeats, realSeats, random);
             room.withLock(() -> {
                 room.addMember(guestId, pickWaitingSeat(room), me);
+                room.assignOwner(guestId);
+                mateScheduler.changeAlwaysFocus(room, matesAlwaysFocus);
                 mateScheduler.populate(room, clock.instant());
                 holdIfDisconnected(room, guestId);
             });
@@ -154,6 +157,24 @@ public class RoomService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
         return room.withLock(() -> new RoomLookupResponse(room.getCode(), room.getSeatCount(), room.getRealSeatCount(),
                 room.waitingSeats().size()));
+    }
+
+    /** 방 설정을 바꾸고 방 전체에 알린다. 방 주인만 바꿀 수 있다 */
+    public RoomSettingsView changeSettings(Long guestId, boolean matesAlwaysFocus) {
+        Room room = roomRegistry.findByGuestId(guestId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
+        return room.withLock(() -> {
+            if (room.isClosed()) {
+                throw new BusinessException(ErrorCode.ROOM_NOT_FOUND);
+            }
+            if (!room.isOwner(guestId)) {
+                throw new BusinessException(ErrorCode.NOT_ROOM_OWNER);
+            }
+            mateScheduler.changeAlwaysFocus(room, matesAlwaysFocus);
+            RoomSettingsView settings = settingsOf(room);
+            messenger.toRoom(room, RoomEventType.ROOM_SETTINGS_CHANGED, null, settings);
+            return settings;
+        });
     }
 
     /** 내가 있는 열람실. 없으면 404 */
@@ -254,11 +275,16 @@ public class RoomService {
 
     private void leaveRoom(Room room, Long guestId) {
         boolean empty = room.withLock(() -> {
+            boolean wasOwner = room.isOwner(guestId);
             room.removeMember(guestId).ifPresent(seat ->
                     messenger.toRoom(room, RoomEventType.SEAT_LEFT, seat.getSeatNo(), new SeatLeftPayload(true)));
             if (room.members().isEmpty()) {
                 room.close();
                 return true;
+            }
+            if (wasOwner) {
+                // 방 주인이 남은 사람에게 넘어갔다
+                messenger.toRoom(room, RoomEventType.ROOM_SETTINGS_CHANGED, null, settingsOf(room));
             }
             return false;
         });
@@ -288,7 +314,8 @@ public class RoomService {
         return room.withLock(() -> {
             Seat seat = room.seatOf(guestId).orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
             return new RoomEnterResponse(room.getRoomId(), room.getCode(), room.getSeatCount(), room.getRealSeatCount(),
-                    seat.getSeatNo(), seat.occupant().map(Occupant::getNickname).orElseThrow());
+                    seat.getSeatNo(), seat.occupant().map(Occupant::getNickname).orElseThrow(),
+                    room.isMatesAlwaysFocus(), room.isOwner(guestId));
         });
     }
 
@@ -299,7 +326,12 @@ public class RoomService {
                 .toList();
         int mySeatNo = room.seatOf(guestId).map(Seat::getSeatNo).orElse(0);
         return messenger.event(RoomEventType.ROOM_SNAPSHOT, room.getRoomId(), null,
-                new SnapshotPayload(clock.instant(), room.getCode(), room.getSeatCount(), mySeatNo, seats));
+                new SnapshotPayload(clock.instant(), room.getCode(), room.getSeatCount(), mySeatNo, seats,
+                        room.isMatesAlwaysFocus(), room.ownerSeatNo()));
+    }
+
+    private RoomSettingsView settingsOf(Room room) {
+        return new RoomSettingsView(room.isMatesAlwaysFocus(), room.ownerSeatNo());
     }
 
     private String newRoomId() {

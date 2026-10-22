@@ -21,11 +21,25 @@ public final class RoomDtos {
      *
      * @param virtualSeats 가상 메이트 자리 수(0~8)
      * @param realSeats    실제 사람 자리 수(나 포함 1~9)
+     * @param matesAlwaysFocus 가상 메이트가 쉬지 않고 자리를 뜨지도 않는다. 없으면 false
      */
     public record RoomCreateRequest(
             @NotNull @Min(0) @Max(Room.MAX_SEAT_COUNT - 1) Integer virtualSeats,
-            @NotNull @Min(1) @Max(Room.MAX_SEAT_COUNT) Integer realSeats
+            @NotNull @Min(1) @Max(Room.MAX_SEAT_COUNT) Integer realSeats,
+            Boolean matesAlwaysFocus
     ) {
+    }
+
+    /** 방 설정 바꾸기. 방 주인만 바꿀 수 있다 */
+    public record RoomSettingsRequest(@NotNull Boolean matesAlwaysFocus) {
+    }
+
+    /**
+     * 방 설정.
+     *
+     * @param ownerSeatNo 설정을 바꿀 수 있는 사람(방 주인)의 자리 번호
+     */
+    public record RoomSettingsView(boolean matesAlwaysFocus, int ownerSeatNo) {
     }
 
     public record RoomJoinRequest(@NotBlank String code) {
@@ -36,9 +50,10 @@ public final class RoomDtos {
      *
      * @param code          입장 코드. 실제 자리가 2개 이상이면 다른 사람에게 나눠 준다
      * @param realSeatCount 실제 사람 자리 수(나 포함)
+     * @param owner         내가 방 주인(설정을 바꿀 수 있는 사람)인지
      */
     public record RoomEnterResponse(String roomId, String code, int seatCount, int realSeatCount, int seatNo,
-                                    String nickname) {
+                                    String nickname, boolean matesAlwaysFocus, boolean owner) {
     }
 
     /** 코드로 들어가기 전에 확인하는 열람실 정보 */
@@ -57,6 +72,8 @@ public final class RoomDtos {
         SEAT_LEFT,
         STATE_CHANGED,
         COUNTS_CHANGED,
+        /** 방 설정이나 방 주인이 바뀌었다. 본문은 RoomSettingsView */
+        ROOM_SETTINGS_CHANGED,
         BREAK_ALERT,
         /** 서버 재시작 등으로 방이 없을 때. 클라이언트는 POST /rooms/enter를 다시 부른다. */
         ROOM_NOT_FOUND
@@ -79,7 +96,8 @@ public final class RoomDtos {
     public record SeatView(int seatNo, OccupantView occupant, boolean waiting) {
     }
 
-    public record SnapshotPayload(Instant serverTime, String code, int seatCount, int mySeatNo, List<SeatView> seats) {
+    public record SnapshotPayload(Instant serverTime, String code, int seatCount, int mySeatNo, List<SeatView> seats,
+                                  boolean matesAlwaysFocus, int ownerSeatNo) {
     }
 
     /** 실제 사람이 나가 자리가 다시 초대 대기가 되면 waiting이 true다. 가상 메이트가 나가면 본문이 없다 */

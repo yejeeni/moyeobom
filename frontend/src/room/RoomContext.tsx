@@ -1,10 +1,10 @@
 import { Client, type StompSubscription } from '@stomp/stompjs'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from '../api'
-import type { Occupant, RoomEnter, RoomEvent, SnapshotPayload } from '../api/types'
+import type { Occupant, RoomEnter, RoomEvent, RoomSettings, SnapshotPayload } from '../api/types'
 import { useToast } from '../components/Toasts'
 import { getGuestId } from '../lib/guest'
-import { isAlertSoundOn, playChime } from '../lib/preferences'
+import { isAlertSoundOn, isMatesAlwaysFocus, playChime, setMatesAlwaysFocus } from '../lib/preferences'
 import { isApiError } from '../api/client'
 import { getRoomConfig, type RoomConfig } from '../lib/roomSize'
 
@@ -28,6 +28,10 @@ interface RoomState {
   connection: Connection
   /** 스냅샷을 받을 때마다 늘어난다. 재연결 뒤 내 상태를 다시 불러올 때 쓴다. */
   snapshotVersion: number
+  /** 가상 메이트가 쉬지 않고 자리를 뜨지도 않는다(방 전체 설정) */
+  matesAlwaysFocus: boolean
+  /** 방 설정을 바꿀 수 있는 사람(방 주인)의 자리. 모르면 0 */
+  ownerSeatNo: number
 }
 
 interface RoomApi extends RoomState {
@@ -39,6 +43,8 @@ interface RoomApi extends RoomState {
   join: (code: string) => Promise<RoomEnter>
   /** 이 화면의 연결만 정리한다(방에서 나오는 일은 서버가 마무리 확정 때 한다) */
   leave: () => void
+  /** 메이트 계속 집중을 바꾼다. 방 주인만 바꿀 수 있고, 고른 값은 다음 새 방에도 쓴다 */
+  changeMatesAlwaysFocus: (on: boolean) => Promise<void>
 }
 
 const EMPTY: RoomState = {
@@ -53,6 +59,8 @@ const EMPTY: RoomState = {
   offsetMs: 0,
   connection: 'idle',
   snapshotVersion: 0,
+  matesAlwaysFocus: false,
+  ownerSeatNo: 0,
 }
 
 const RoomContext = createContext<RoomApi | null>(null)
@@ -69,6 +77,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const subscriptionsRef = useRef<StompSubscription[]>([])
   const seatsRef = useRef<Record<number, Occupant | null>>({})
   const mySeatRef = useRef<number | null>(null)
+  // 설정 알림을 띄울지 비교하려고 마지막 방 설정을 따로 둔다
+  const settingsRef = useRef<RoomSettings>({ matesAlwaysFocus: false, ownerSeatNo: 0 })
   const enterRef = useRef<() => Promise<RoomEnter>>(() => Promise.reject())
 
   const handleEvent = useCallback(
@@ -85,6 +95,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           })
           seatsRef.current = seats
           mySeatRef.current = payload.mySeatNo
+          settingsRef.current = { matesAlwaysFocus: payload.matesAlwaysFocus, ownerSeatNo: payload.ownerSeatNo }
           setState((s) => ({
             ...s,
             seats,
@@ -95,7 +106,24 @@ export function RoomProvider({ children }: { children: ReactNode }) {
             nickname: seats[payload.mySeatNo]?.nickname ?? s.nickname,
             offsetMs: Date.parse(payload.serverTime) - Date.now(),
             snapshotVersion: s.snapshotVersion + 1,
+            matesAlwaysFocus: payload.matesAlwaysFocus,
+            ownerSeatNo: payload.ownerSeatNo,
           }))
+          return
+        }
+        case 'ROOM_SETTINGS_CHANGED': {
+          const settings = event.payload as RoomSettings
+          const me = mySeatRef.current
+          const before = settingsRef.current
+          settingsRef.current = settings
+          // 방 주인이 바꾼 설정은 다른 사람에게 알리고, 방 주인을 이어받으면 나에게 알린다
+          if (settings.ownerSeatNo !== me && settings.matesAlwaysFocus !== before.matesAlwaysFocus) {
+            toast.show(settings.matesAlwaysFocus ? '방을 만든 사람이 메이트 계속 집중을 켰어요' : '방을 만든 사람이 메이트 계속 집중을 껐어요')
+          }
+          if (settings.ownerSeatNo === me && before.ownerSeatNo !== me && before.ownerSeatNo !== 0) {
+            toast.show('방을 만든 사람이 나가서 이제 내가 방 설정을 바꿀 수 있어요')
+          }
+          setState((s) => ({ ...s, matesAlwaysFocus: settings.matesAlwaysFocus, ownerSeatNo: settings.ownerSeatNo }))
           return
         }
         case 'SEAT_JOINED': {
@@ -184,6 +212,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       const changed = roomIdRef.current !== entered.roomId
       roomIdRef.current = entered.roomId
       if (changed) seatsRef.current = {}
+      // 방 주인의 자리는 스냅샷으로 받는다. 내가 주인이면 바로 안다
+      const ownerSeatNo = entered.owner ? entered.seatNo : changed ? 0 : settingsRef.current.ownerSeatNo
+      settingsRef.current = { matesAlwaysFocus: entered.matesAlwaysFocus, ownerSeatNo }
       setState((s) => ({
         ...s,
         roomId: entered.roomId,
@@ -192,6 +223,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         realSeatCount: entered.realSeatCount,
         mySeatNo: entered.seatNo,
         nickname: entered.nickname,
+        matesAlwaysFocus: entered.matesAlwaysFocus,
+        ownerSeatNo,
         // 새 방이면 스냅샷이 올 때까지 이전 방 자리를 비운다
         seats: changed ? {} : s.seats,
         waiting: changed ? {} : s.waiting,
@@ -203,7 +236,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   )
 
   const create = useCallback(
-    async (config: RoomConfig) => attach(await api.createRoom(config.virtualSeats, config.realSeats)),
+    async (config: RoomConfig) =>
+      attach(await api.createRoom(config.virtualSeats, config.realSeats, isMatesAlwaysFocus())),
     [attach],
   )
 
@@ -241,13 +275,24 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     roomIdRef.current = null
     subscriptionsRef.current = []
     seatsRef.current = {}
+    settingsRef.current = { matesAlwaysFocus: false, ownerSeatNo: 0 }
     setState(EMPTY)
     client?.deactivate()
   }, [])
 
+  const changeMatesAlwaysFocus = useCallback(async (on: boolean) => {
+    const settings = await api.changeRoomSettings(on)
+    setMatesAlwaysFocus(on)
+    settingsRef.current = settings
+    setState((s) => ({ ...s, matesAlwaysFocus: settings.matesAlwaysFocus, ownerSeatNo: settings.ownerSeatNo }))
+  }, [])
+
   useEffect(() => () => void clientRef.current?.deactivate(), [])
 
-  const value = useMemo(() => ({ ...state, enter, create, join, leave }), [state, enter, create, join, leave])
+  const value = useMemo(
+    () => ({ ...state, enter, create, join, leave, changeMatesAlwaysFocus }),
+    [state, enter, create, join, leave, changeMatesAlwaysFocus],
+  )
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>
 }
 

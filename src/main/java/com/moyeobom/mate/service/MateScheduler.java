@@ -61,10 +61,35 @@ public class MateScheduler {
         }
     }
 
-    /** 방 락을 잡은 상태에서 부른다. 메이트를 앉히고 첫 전이를 예약한다. */
+    /** 방 락을 잡은 상태에서 부른다. 메이트를 앉히고 첫 전이를 예약한다. 계속 집중인 방이면 쉬던 메이트도 집중으로 앉힌다 */
     public void seat(Room room, Seat seat, PlacedMate mate) {
-        seat.sit(mate.occupant());
-        scheduleTransition(room, seat, mate.occupant(), mate.nextTransitionAt());
+        Occupant occupant = mate.occupant();
+        seat.sit(occupant);
+        if (room.isMatesAlwaysFocus() && occupant.getState() == SeatState.BREAK) {
+            occupant.changeState(SeatState.FOCUS, occupant.getSince());
+            scheduleTransition(room, seat, occupant, clock.instant().plus(mateFactory.focusDuration()));
+            return;
+        }
+        scheduleTransition(room, seat, occupant, mate.nextTransitionAt());
+    }
+
+    /**
+     * 방 락을 잡은 상태에서 부른다. 메이트 계속 집중을 켜고 끈다.
+     * 켜면 쉬던 메이트는 바로 집중을 시작한다. 끄면 다음 전이부터 원래 규칙(휴식, 퇴장)으로 돌아간다.
+     */
+    public void changeAlwaysFocus(Room room, boolean enabled) {
+        room.changeMatesAlwaysFocus(enabled);
+        if (!enabled) {
+            return;
+        }
+        Instant now = clock.instant();
+        for (Seat seat : room.virtualSeats()) {
+            seat.occupant().filter(mate -> mate.getState() == SeatState.BREAK).ifPresent(mate -> {
+                mate.changeState(SeatState.FOCUS, now);
+                messenger.toRoom(room, RoomEventType.STATE_CHANGED, seat.getSeatNo(), new StatePayload(SeatState.FOCUS, now));
+                scheduleTransition(room, seat, mate, now.plus(mateFactory.focusDuration()));
+            });
+        }
     }
 
     void transition(Room room, int seatNo, Occupant expected) {
@@ -98,7 +123,7 @@ public class MateScheduler {
     private void finishFocus(Room room, Seat seat, Occupant mate, Instant now) {
         // 과반 집중 규칙: 이 메이트가 쉬면 집중 인원이 앉은 사람의 과반보다 적어질 때는 휴식 대신 집중을 늘린다
         long focusingAfterBreak = room.focusingCount() - 1;
-        if (focusingAfterBreak < MateFactory.majorityOf(room.occupiedCount())) {
+        if (!room.isMatesAlwaysFocus() && focusingAfterBreak < MateFactory.majorityOf(room.occupiedCount())) {
             scheduleTransition(room, seat, mate, now.plus(mateFactory.focusExtension()));
             return;
         }
@@ -108,13 +133,21 @@ public class MateScheduler {
             messenger.toRoom(room, RoomEventType.COUNTS_CHANGED, seat.getSeatNo(),
                     new CountsPayload(mate.getCompletedCount(), mate.getRemainingCount()));
         }
+        if (room.isMatesAlwaysFocus()) {
+            // 쉬지 않고 바로 다음 집중을 시작한다
+            mate.changeState(SeatState.FOCUS, now);
+            messenger.toRoom(room, RoomEventType.STATE_CHANGED, seat.getSeatNo(), new StatePayload(SeatState.FOCUS, now));
+            scheduleTransition(room, seat, mate, now.plus(mateFactory.focusDuration()));
+            return;
+        }
         mate.changeState(SeatState.BREAK, now);
         messenger.toRoom(room, RoomEventType.STATE_CHANGED, seat.getSeatNo(), new StatePayload(SeatState.BREAK, now));
         scheduleTransition(room, seat, mate, now.plus(mateFactory.breakDuration()));
     }
 
     private void finishBreak(Room room, Seat seat, Occupant mate, Instant now) {
-        if (mateFactory.rollLeave()) {
+        // 계속 집중인 방에서는 자리를 뜨지 않는다
+        if (!room.isMatesAlwaysFocus() && mateFactory.rollLeave()) {
             seat.leave();
             messenger.toRoom(room, RoomEventType.SEAT_LEFT, seat.getSeatNo(), null);
             scheduleRefill(room, seat, now.plus(mateFactory.refillDelay()));

@@ -40,6 +40,11 @@ public class Room {
     private final Map<Long, ScheduledFuture<?>> memberGrace = new HashMap<>();
     @Getter
     private boolean closed;
+    /** 방 설정을 바꿀 수 있는 사람. 처음에는 만든 사람이고, 나가면 남은 사람에게 넘어간다 */
+    private Long ownerId;
+    /** 가상 메이트가 쉬지 않고 자리를 뜨지도 않는다 */
+    @Getter
+    private boolean matesAlwaysFocus;
 
     private Room(String roomId, String code, List<Seat> seats) {
         this.roomId = roomId;
@@ -131,16 +136,44 @@ public class Room {
         seatByMember.put(guestId, seat.getSeatNo());
     }
 
-    /** 참여자를 내보내고 그 자리를 비운다(락 안에서). 비운 자리를 돌려준다 */
+    /** 참여자를 내보내고 그 자리를 비운다(락 안에서). 방 주인이 나가면 남은 사람 중 앞자리에게 넘긴다. 비운 자리를 돌려준다 */
     public Optional<Seat> removeMember(Long guestId) {
         cancelGrace(guestId);
         Integer seatNo = seatByMember.remove(guestId);
         if (seatNo == null) {
             return Optional.empty();
         }
+        if (guestId.equals(ownerId)) {
+            ownerId = seatByMember.entrySet().stream()
+                    .min(Map.Entry.comparingByValue())
+                    .map(Map.Entry::getKey)
+                    .orElse(null);
+        }
         Seat seat = seat(seatNo);
         seat.leave();
         return Optional.of(seat);
+    }
+
+    /** 방 주인을 정한다(락 안에서). 방을 만든 사람이다 */
+    public void assignOwner(Long guestId) {
+        if (!hasMember(guestId)) {
+            throw new IllegalStateException("방에 없는 사람은 주인이 될 수 없습니다: " + guestId);
+        }
+        this.ownerId = guestId;
+    }
+
+    public boolean isOwner(Long guestId) {
+        return guestId != null && guestId.equals(ownerId);
+    }
+
+    /** 방 주인의 자리 번호. 주인이 없으면 0 */
+    public int ownerSeatNo() {
+        return ownerId == null ? 0 : seatByMember.getOrDefault(ownerId, 0);
+    }
+
+    /** 메이트 계속 집중을 켜고 끈다(락 안에서). 메이트 상태는 MateScheduler가 맞춘다 */
+    public void changeMatesAlwaysFocus(boolean matesAlwaysFocus) {
+        this.matesAlwaysFocus = matesAlwaysFocus;
     }
 
     /** 자리에 앉은 사람 수(실제 + 가상) */

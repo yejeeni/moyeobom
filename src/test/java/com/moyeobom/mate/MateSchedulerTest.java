@@ -208,6 +208,62 @@ class MateSchedulerTest {
     }
 
     @Test
+    void 계속_집중으로_만든_방은_하루_동안_메이트가_쉬거나_자리를_뜨지_않고_빈자리는_채워진다() {
+        // 기본으로 만든 방의 예약이 같은 스케줄러에서 함께 돌지 않게 닫는다
+        room.close();
+        Room focused = Room.solo("r-focus", Room.MAX_SEAT_COUNT, 5);
+        focused.seat(5).sit(occupant(OccupantKind.REAL, SeatState.IDLE));
+        mateScheduler.changeAlwaysFocus(focused, true);
+        mateScheduler.populate(focused, START);
+
+        assertThat(mates(focused)).allMatch(Occupant::isFocusing);
+        Instant end = START.plus(Duration.ofHours(24));
+        while (scheduler.runNext(end)) {
+            assertThat(mates(focused)).allMatch(Occupant::isFocusing);
+            for (Seat seat : focused.virtualSeats()) {
+                assertScheduledWithinRange(seat);
+            }
+        }
+
+        assertThat(focused.virtualSeats()).noneMatch(Seat::isEmpty);
+        assertThat(events).doesNotContain(RoomEventType.SEAT_LEFT).contains(RoomEventType.SEAT_JOINED);
+    }
+
+    @Test
+    void 계속_집중을_켜면_쉬던_메이트가_바로_집중으로_돌아가고_끄면_다시_쉬고_자리를_뜬다() {
+        room.close();
+        Room mixed = Room.solo("r-mixed", 3, 1);
+        mixed.seat(1).sit(occupant(OccupantKind.REAL, SeatState.FOCUS));
+        Seat resting = mixed.seat(2);
+        mateScheduler.seat(mixed, resting,
+                new PlacedMate(occupant(OccupantKind.VIRTUAL, SeatState.BREAK), START.plus(Duration.ofMinutes(10))));
+        mateScheduler.seat(mixed, mixed.seat(3),
+                new PlacedMate(occupant(OccupantKind.VIRTUAL, SeatState.FOCUS), START.plus(Duration.ofMinutes(30))));
+        clock.set(START.plus(Duration.ofMinutes(1)));
+
+        mateScheduler.changeAlwaysFocus(mixed, true);
+
+        Occupant mate = resting.occupant().orElseThrow();
+        assertThat(mixed.isMatesAlwaysFocus()).isTrue();
+        assertThat(mate.getState()).isEqualTo(SeatState.FOCUS);
+        assertThat(mate.getSince()).isEqualTo(clock.instant());
+        assertThat(events).containsExactly(RoomEventType.STATE_CHANGED);
+        // 쉬는 동안 잡혀 있던 예약(10분 뒤 집중)은 집중 시간 예약으로 바뀐다
+        assertThat(Duration.between(clock.instant(), resting.getScheduledAt()))
+                .isBetween(Duration.ofMinutes(25), Duration.ofMinutes(90));
+
+        mateScheduler.changeAlwaysFocus(mixed, false);
+        Instant end = START.plus(Duration.ofHours(24));
+        boolean rested = false;
+        while (scheduler.runNext(end)) {
+            rested |= mixed.virtualSeats().stream().flatMap(seat -> seat.occupant().stream())
+                    .anyMatch(occupant -> occupant.getState() == SeatState.BREAK);
+        }
+        assertThat(rested).isTrue();
+        assertThat(events).contains(RoomEventType.SEAT_LEFT);
+    }
+
+    @Test
     void 정리된_방의_예약은_아무것도_하지_않는다() {
         room.close();
 
@@ -221,6 +277,10 @@ class MateSchedulerTest {
         created.seat(5).sit(occupant(OccupantKind.REAL, SeatState.IDLE));
         mateScheduler.populate(created, START);
         return created;
+    }
+
+    private static List<Occupant> mates(Room target) {
+        return target.virtualSeats().stream().flatMap(seat -> seat.occupant().stream()).toList();
     }
 
     private MateScheduler newMateScheduler(long seed) {

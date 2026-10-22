@@ -5,6 +5,8 @@ import com.moyeobom.room.dto.RoomDtos.RoomCreateRequest;
 import com.moyeobom.room.dto.RoomDtos.RoomEnterResponse;
 import com.moyeobom.room.dto.RoomDtos.RoomJoinRequest;
 import com.moyeobom.room.dto.RoomDtos.RoomLookupResponse;
+import com.moyeobom.room.dto.RoomDtos.RoomSettingsRequest;
+import com.moyeobom.room.dto.RoomDtos.RoomSettingsView;
 import com.moyeobom.room.service.CodeAttemptLimiter;
 import com.moyeobom.room.service.RoomService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,6 +16,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -39,7 +42,17 @@ public class RoomController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public RoomEnterResponse create(@CurrentGuest Long guestId, @Valid @RequestBody RoomCreateRequest request) {
-        return roomService.create(guestId, request.virtualSeats(), request.realSeats());
+        return roomService.create(guestId, request.virtualSeats(), request.realSeats(),
+                Boolean.TRUE.equals(request.matesAlwaysFocus()));
+    }
+
+    @Operation(summary = "방 설정 바꾸기", description = """
+            메이트 계속 집중(쉬지 않고 자리를 뜨지도 않음)을 켜고 끈다. 방 전체에 적용되며 ROOM_SETTINGS_CHANGED로 알린다.
+            방 주인(만든 사람, 나가면 남은 사람에게 넘어감)만 바꿀 수 있고, 아니면 403 NOT_ROOM_OWNER. 방에 없으면 404
+            """)
+    @PatchMapping("/current/settings")
+    public RoomSettingsView changeSettings(@CurrentGuest Long guestId, @Valid @RequestBody RoomSettingsRequest request) {
+        return roomService.changeSettings(guestId, request.matesAlwaysFocus());
     }
 
     @Operation(summary = "코드로 들어가기", description = """

@@ -1,4 +1,4 @@
-import { DEFAULT_FRAME_MS, MAX_FRAMES, describeMissing, parseFrameName, type FrameName, type FrameState } from './characters'
+import { DEFAULT_FRAME_MS, MAX_FRAMES, describeMissing, fillsSeatType, parseFrameName, type FrameName, type FrameState } from './characters'
 
 /**
  * 사용자가 등록한 캐릭터를 브라우저 저장소(IndexedDB)에 둔다. 서버로는 보내지 않는다.
@@ -119,10 +119,15 @@ export async function importFiles(files: File[], existing: StoredCharacter[]): P
     const candidates: { key: string; frame: FrameName; file: File }[] = []
     const stills: Partial<Record<FrameState | 'background', Blob>> = {}
     let background: Blob | null = null
+    // 규칙에 없는 이름의 그림. 폴더에 이것 한 장뿐이면 집중·휴식 모두 이 그림으로 쓴다
+    const unnamed: File[] = []
     for (const file of groupFiles) {
       const key = file.name.replace(IMAGE_EXT, '').toLowerCase()
       const frame = parseFrameName(key)
-      if (!frame && key !== 'background') continue
+      if (!frame && key !== 'background') {
+        unnamed.push(file)
+        continue
+      }
       if (file.size > MAX_FILE_BYTES) {
         result.problems.push(`${name}/${file.name}: 5MB보다 커서 건너뛰었어요`)
         continue
@@ -134,6 +139,15 @@ export async function importFiles(files: File[], existing: StoredCharacter[]): P
       background = file
       const still = await firstFrame(file)
       if (still) stills.background = still
+    }
+
+    const single = candidates.length === 0 && unnamed.length === 1 ? unnamed[0] : null
+    if (single) {
+      if (single.size > MAX_FILE_BYTES) {
+        result.problems.push(`${name}/${single.name}: 5MB보다 커서 건너뛰었어요`)
+        continue
+      }
+      candidates.push({ key: 'focus', frame: { state: 'focus', order: 0, animated: true }, file: single })
     }
 
     // 상태마다 앞 MAX_FRAMES장만 저장한다. 움짤 한 장은 첫 장면을 따로 만들어 둔다
@@ -151,15 +165,20 @@ export async function importFiles(files: File[], existing: StoredCharacter[]): P
 
     const frameKeys = Object.keys(frames)
     if (frameKeys.length === 0) {
-      // 캐릭터 그림이 없는 폴더(상위 폴더, 템플릿 등)는 조용히 넘어가고, 배경만 있으면 알려 준다
-      if (background) result.problems.push(`${name}: 캐릭터 그림(focus-1.png 등)이 없어 건너뛰었어요`)
+      // 캐릭터 그림이 없는 폴더(상위 폴더 등)는 조용히 넘어가고, 배경만 있거나 이름 없는 그림이 여러 장이면 알려 준다
+      if (unnamed.length > 1) {
+        result.problems.push(`${name}: 그림 이름이 focus, break 규칙을 따르지 않아 건너뛰었어요. 한 장만 두면 이름과 상관없이 써요`)
+      } else if (background) {
+        result.problems.push(`${name}: 캐릭터 그림(focus-1.png 등)이 없어 건너뛰었어요`)
+      }
       continue
     }
 
-    // GIF는 칸을 꽉 채워 그리므로 캔버스 비율을 따지지 않는다
+    // GIF와 JPG는 칸을 꽉 채워 그리므로 캔버스 비율을 따지지 않는다
     const first = frames[frameKeys[0]]!
-    const sizeNote = first.type === 'image/gif' ? null : await checkSize(first)
-    describeMissing(candidates.map((c) => c.frame)).forEach((note) => result.notes.push(`${name}: ${note}`))
+    const sizeNote = fillsSeatType(first.type) ? null : await checkSize(first)
+    // 한 장짜리는 일부러 같은 그림을 쓰는 것이라 대체 안내를 하지 않는다
+    if (!single) describeMissing(candidates.map((c) => c.frame)).forEach((note) => result.notes.push(`${name}: ${note}`))
     if (sizeNote) result.notes.push(`${name}: ${sizeNote}`)
 
     const id = `mine:${name}`

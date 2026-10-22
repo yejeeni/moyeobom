@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { BUILTIN_CHARACTERS, resolveFrames, type CharacterAsset, type FrameState } from './characters'
+import { BUILTIN_CHARACTERS, fillsSeatType, resolveFrames, type CharacterAsset, type FrameState } from './characters'
 import {
   deleteCharacter,
   frameMsOf,
@@ -84,7 +84,7 @@ export function CharacterLibraryProvider({ children }: { children: ReactNode }) 
         const animated = key === 'background' ? background : list?.length === 1 ? list[0] : null
         if (animated && still) stills[animated] = toUrl(still)
       }
-      const fillsSeat = Object.values(c.frames).some((blob) => blob.type === 'image/gif')
+      const fillsSeat = Object.values(c.frames).some((blob) => fillsSeatType(blob.type))
       return [{ id: c.id, name: c.name, source: 'mine', frameMs: frameMsOf(c), frames, background, stills, fillsSeat }]
     })
     urlsRef.current = urls

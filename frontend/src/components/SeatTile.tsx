@@ -5,6 +5,7 @@ import { MotionImage } from './MotionImage'
 import { phaseOf, pickBuiltin, type CharacterAsset } from '../character/characters'
 import { STATE_LABEL, elapsedSeconds, formatShort, shownState } from '../lib/time'
 import { Character } from './Character'
+import { Icon } from './Icon'
 
 // 줌 화면의 각 칸처럼 자리마다 방 분위기를 조금씩 다르게 한다
 const ROOM_TONES = ['tone-rose', 'tone-lilac', 'tone-peach', 'tone-sage', 'tone-sky', 'tone-sand']
@@ -26,6 +27,8 @@ interface Props {
   code?: string | null
   /** 초대 대기 칸을 누르면 초대 링크를 복사한다 */
   onInvite?: () => void
+  /** 이 자리에 보일 캐릭터를 고르는 창을 연다 */
+  onPickCharacter?: () => void
 }
 
 interface SeatEvent {
@@ -64,7 +67,7 @@ function useSeatEvent(occupant: Occupant | null, isMe: boolean): SeatEvent | nul
   return event
 }
 
-export function SeatTile({ seatNo, occupant, isMe, now, offsetMs, compact, character, waiting = false, code, onInvite }: Props) {
+export function SeatTile({ seatNo, occupant, isMe, now, offsetMs, compact, character, waiting = false, code, onInvite, onPickCharacter }: Props) {
   const event = useSeatEvent(occupant, isMe)
 
   if (!occupant) {
@@ -151,6 +154,17 @@ export function SeatTile({ seatNo, occupant, isMe, now, offsetMs, compact, chara
           {event.kind === 'done' ? '✓' : <span className="event-lamp" />}
           {event.text}
         </div>
+      )}
+      {onPickCharacter && (
+        <button
+          type="button"
+          className="seat-pick"
+          onClick={onPickCharacter}
+          aria-label={`${name} 캐릭터 바꾸기`}
+          title="캐릭터 바꾸기"
+        >
+          <Icon name="image" size={16} />
+        </button>
       )}
       {(!compact || isMe) && (
         <div className="name-label">

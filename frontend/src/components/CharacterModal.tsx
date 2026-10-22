@@ -62,32 +62,30 @@ export function CharacterModal({ onClose }: { onClose: () => void }) {
           <div className="setting-group">
             <div className="character-import">
               <p>
-                상태마다 그림을 차례로 넘기거나(상태마다 12장까지), 움짤 한 장을 그대로 재생해서 캐릭터가 움직여요.
-                캐릭터마다 폴더를 하나 만들고 아래 이름으로 그림을 넣은 뒤, <strong>폴더째</strong> 가져오세요. 여러 캐릭터
-                폴더를 담은 상위 폴더를 골라도 돼요.
+                캐릭터마다 폴더를 하나 만들어 그림을 넣고, <strong>폴더째</strong> 가져오세요. 폴더 이름이 캐릭터 이름이 돼요.
               </p>
               <pre className="folder-spec">
                 {`고양이/
-  focus-1.png … focus-12.png  ← 차례로 넘김
-  break.webp       ← 또는 움짤 한 장
-  background.gif   ← 배경(움짤도 돼요)`}
+  아무이름.jpg     ← 한 장이면 이걸로 끝
+
+고양이/
+  focus.gif        ← 공부할 때
+  break.gif        ← 쉴 때
+  background.png   ← 배경 (없어도 돼요)`}
               </pre>
-              <p className="muted small">
-                focus는 집중, break는 휴식(집중하지 않는 동안) 그림이에요. 예전 idle 그림은 휴식 그림이 없을 때 대신 써요. background는 책상까지 포함한 칸 전체 배경으로, 없어도
-                돼요. 움짤은 GIF, 움직이는 WebP, APNG를 받아요. GIF는 투명한 가장자리가 거칠게 보여서 WebP나 APNG를
-                추천해요. GIF가 들어 있는 캐릭터는 투명하든 아니든 칸 전체를 꽉 채워 보여 줘요. 그림 한 장은 5MB까지이고, 예전 이름(focus-a, focus-b)도 그대로 받아요.
-              </p>
-              <p className="muted small">
-                800x600 투명 PNG로, 같은 위치 기준으로 그려 주세요. 빠진 그림은 다른 그림으로 대신해요. 같은 이름의 폴더를
-                다시 가져오면 새 그림으로 바뀌어요.
-              </p>
+              <ul className="character-tips muted small">
+                <li>PNG, JPG, GIF, WebP를 받아요. 한 장에 5MB까지예요.</li>
+                <li>JPG와 GIF는 칸을 꽉 채워요. 투명 PNG는 800x600으로 그리면 자리에 딱 맞아요.</li>
+                <li>여러 장을 넘겨 움직이게 하려면 focus-1, focus-2…처럼 번호를 붙여요(12장까지).</li>
+                <li>같은 이름의 폴더를 다시 가져오면 새 그림으로 바뀌어요.</li>
+              </ul>
               <div className="character-import-actions">
                 <button className="button primary" onClick={() => folderInput.current?.click()} disabled={importing}>
                   <Icon name="upload" size={16} />
                   {importing ? '가져오는 중…' : '폴더 가져오기'}
                 </button>
               </div>
-              <input ref={folderInput} type="file" multiple accept="image/png,image/webp,image/jpeg" hidden onChange={onPick} />
+              <input ref={folderInput} type="file" multiple accept="image/png,image/webp,image/jpeg,image/gif" hidden onChange={onPick} />
             </div>
             {report && (report.notes.length > 0 || report.problems.length > 0) && (
               <ul className="import-report">
@@ -246,7 +244,7 @@ function FrameMsSlider({ name, value, onCommit }: { name: string; value: number;
   )
 }
 
-function CharacterPreview({ asset }: { asset: CharacterAsset }) {
+export function CharacterPreview({ asset }: { asset: CharacterAsset }) {
   return (
     <div className="character-preview seat-focus" aria-hidden="true">
       {asset.background || asset.fillsSeat ? (

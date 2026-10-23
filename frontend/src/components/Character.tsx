@@ -23,7 +23,8 @@ const FOCUS_PAUSE_FRAMES = 3
 
 /**
  * 상태별 그림을 차례로 넘겨 보여 준다(플립북). 실제 유저와 가상 메이트가 같은 규칙으로 그려진다.
- * 상태가 바뀔 때 깜빡이지 않도록 모든 상태의 그림을 미리 깔아 두고 지금 그림만 보이게 한다.
+ * 상태가 바뀔 때 기다리지 않도록 모든 상태의 그림을 미리 받아 두고 지금 그림만 보이게 한다.
+ * 다른 상태의 그림은 그리지 않아(display: none) 움짤이 보이지 않는 곳에서 계속 재생되지 않게 한다.
  * 움짤 한 장이거나 '움직임 줄이기'를 켰으면 넘기지 않는다.
  */
 export function Character({ asset, state: seatState, phase, flipped = false, paired = false }: Props) {
@@ -41,7 +42,7 @@ export function Character({ asset, state: seatState, phase, flipped = false, pai
         asset.frames[s].map((src, i) => (
           <MotionImage
             key={`${s}-${i}`}
-            className={`frame ${s === state && i === frameIndex ? 'is-current' : ''}`}
+            className={`frame ${s !== state ? 'is-standby' : i === frameIndex ? 'is-current' : ''}`}
             src={src}
             still={asset.stills[src]}
           />

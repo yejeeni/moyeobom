@@ -1,4 +1,4 @@
-import { Client, type StompSubscription } from '@stomp/stompjs'
+import { Client, TickerStrategy, type StompSubscription } from '@stomp/stompjs'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from '../api'
 import type { MateSettings, Occupant, RoomEnter, RoomEvent, RoomSettings, SnapshotPayload } from '../api/types'
@@ -199,6 +199,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       connectHeaders: { 'X-Guest-Id': getGuestId() ?? '' },
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,
+      // 탭이 오래 안 보이면 브라우저가 화면의 타이머를 1분에 한 번 정도로 늦춘다. 그러면 연결 확인 신호가 30초 넘게 끊겨
+      // 서버가 연결이 끊겼다고 보고 집중을 닫는다. Web Worker의 타이머는 덜 늦춰져서 다른 화면을 보는 동안에도 신호가 간다
+      heartbeatStrategy: TickerStrategy.Worker,
       reconnectDelay: 3000,
     })
     client.onConnect = () => {

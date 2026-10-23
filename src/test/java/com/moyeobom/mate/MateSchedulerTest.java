@@ -208,13 +208,8 @@ class MateSchedulerTest {
     }
 
     @Test
-    void 계속_집중으로_만든_방은_하루_동안_메이트가_쉬거나_자리를_뜨지_않고_빈자리는_채워진다() {
-        // 기본으로 만든 방의 예약이 같은 스케줄러에서 함께 돌지 않게 닫는다
-        room.close();
-        Room focused = Room.solo("r-focus", Room.MAX_SEAT_COUNT, 5);
-        focused.seat(5).sit(occupant(OccupantKind.REAL, SeatState.IDLE));
-        mateScheduler.changeAlwaysFocus(focused, true);
-        mateScheduler.populate(focused, START);
+    void 집중_계속과_자리_유지를_모두_켜면_하루_동안_메이트가_쉬거나_자리를_뜨지_않고_빈자리는_채워진다() {
+        Room focused = roomWith(true, true);
 
         assertThat(mates(focused)).allMatch(Occupant::isFocusing);
         Instant end = START.plus(Duration.ofHours(24));
@@ -230,7 +225,35 @@ class MateSchedulerTest {
     }
 
     @Test
-    void 계속_집중을_켜면_쉬던_메이트가_바로_집중으로_돌아가고_끄면_다시_쉬고_자리를_뜬다() {
+    void 집중_계속만_켜면_쉬지_않지만_집중이_끝날_때_가끔_자리를_뜨고_새_메이트가_채운다() {
+        Room focused = roomWith(true, false);
+
+        Instant end = START.plus(Duration.ofHours(24));
+        while (scheduler.runNext(end)) {
+            assertThat(mates(focused)).allMatch(Occupant::isFocusing);
+        }
+
+        assertThat(events).contains(RoomEventType.SEAT_LEFT, RoomEventType.SEAT_JOINED);
+    }
+
+    @Test
+    void 자리_유지만_켜면_쉬기는_하지만_자리를_뜨지_않는다() {
+        Room staying = roomWith(false, true);
+
+        Instant end = START.plus(Duration.ofHours(24));
+        boolean rested = false;
+        while (scheduler.runNext(end)) {
+            rested |= mates(staying).stream().anyMatch(mate -> mate.getState() == SeatState.BREAK);
+            // 쉬는 메이트가 있어도 과반 집중 규칙은 그대로다
+            assertThat(staying.focusingCount()).isGreaterThanOrEqualTo(MateFactory.majorityOf(staying.occupiedCount()));
+        }
+
+        assertThat(rested).isTrue();
+        assertThat(events).doesNotContain(RoomEventType.SEAT_LEFT);
+    }
+
+    @Test
+    void 집중_계속을_켜면_쉬던_메이트가_바로_집중으로_돌아가고_모두_끄면_다시_쉬고_자리를_뜬다() {
         room.close();
         Room mixed = Room.solo("r-mixed", 3, 1);
         mixed.seat(1).sit(occupant(OccupantKind.REAL, SeatState.FOCUS));
@@ -241,10 +264,11 @@ class MateSchedulerTest {
                 new PlacedMate(occupant(OccupantKind.VIRTUAL, SeatState.FOCUS), START.plus(Duration.ofMinutes(30))));
         clock.set(START.plus(Duration.ofMinutes(1)));
 
-        mateScheduler.changeAlwaysFocus(mixed, true);
+        mateScheduler.changeMateSettings(mixed, true, true);
 
         Occupant mate = resting.occupant().orElseThrow();
         assertThat(mixed.isMatesAlwaysFocus()).isTrue();
+        assertThat(mixed.isMatesStay()).isTrue();
         assertThat(mate.getState()).isEqualTo(SeatState.FOCUS);
         assertThat(mate.getSince()).isEqualTo(clock.instant());
         assertThat(events).containsExactly(RoomEventType.STATE_CHANGED);
@@ -252,12 +276,11 @@ class MateSchedulerTest {
         assertThat(Duration.between(clock.instant(), resting.getScheduledAt()))
                 .isBetween(Duration.ofMinutes(25), Duration.ofMinutes(90));
 
-        mateScheduler.changeAlwaysFocus(mixed, false);
+        mateScheduler.changeMateSettings(mixed, false, false);
         Instant end = START.plus(Duration.ofHours(24));
         boolean rested = false;
         while (scheduler.runNext(end)) {
-            rested |= mixed.virtualSeats().stream().flatMap(seat -> seat.occupant().stream())
-                    .anyMatch(occupant -> occupant.getState() == SeatState.BREAK);
+            rested |= mates(mixed).stream().anyMatch(occupant -> occupant.getState() == SeatState.BREAK);
         }
         assertThat(rested).isTrue();
         assertThat(events).contains(RoomEventType.SEAT_LEFT);
@@ -275,6 +298,16 @@ class MateSchedulerTest {
     private Room createRoom() {
         Room created = Room.solo("r-test", Room.MAX_SEAT_COUNT, 5);
         created.seat(5).sit(occupant(OccupantKind.REAL, SeatState.IDLE));
+        mateScheduler.populate(created, START);
+        return created;
+    }
+
+    /** 메이트 설정을 정해 만든 9자리 방. 기본으로 만든 방의 예약이 같은 스케줄러에서 함께 돌지 않게 그 방은 닫는다 */
+    private Room roomWith(boolean alwaysFocus, boolean stay) {
+        room.close();
+        Room created = Room.solo("r-settings", Room.MAX_SEAT_COUNT, 5);
+        created.seat(5).sit(occupant(OccupantKind.REAL, SeatState.IDLE));
+        mateScheduler.changeMateSettings(created, alwaysFocus, stay);
         mateScheduler.populate(created, START);
         return created;
     }

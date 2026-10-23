@@ -43,16 +43,17 @@ public class RoomController {
     @ResponseStatus(HttpStatus.CREATED)
     public RoomEnterResponse create(@CurrentGuest Long guestId, @Valid @RequestBody RoomCreateRequest request) {
         return roomService.create(guestId, request.virtualSeats(), request.realSeats(),
-                Boolean.TRUE.equals(request.matesAlwaysFocus()));
+                Boolean.TRUE.equals(request.matesAlwaysFocus()), Boolean.TRUE.equals(request.matesStay()));
     }
 
     @Operation(summary = "방 설정 바꾸기", description = """
-            메이트 계속 집중(쉬지 않고 자리를 뜨지도 않음)을 켜고 끈다. 방 전체에 적용되며 ROOM_SETTINGS_CHANGED로 알린다.
+            메이트 설정을 바꾼다. matesAlwaysFocus는 쉬지 않고 계속 집중, matesStay는 자리를 뜨지 않음이며 보낸 항목만 바뀐다.
+            방 전체에 적용되며 ROOM_SETTINGS_CHANGED로 알린다.
             방 주인(만든 사람, 나가면 남은 사람에게 넘어감)만 바꿀 수 있고, 아니면 403 NOT_ROOM_OWNER. 방에 없으면 404
             """)
     @PatchMapping("/current/settings")
     public RoomSettingsView changeSettings(@CurrentGuest Long guestId, @Valid @RequestBody RoomSettingsRequest request) {
-        return roomService.changeSettings(guestId, request.matesAlwaysFocus());
+        return roomService.changeSettings(guestId, request.matesAlwaysFocus(), request.matesStay());
     }
 
     @Operation(summary = "코드로 들어가기", description = """

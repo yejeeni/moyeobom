@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
-import { isAlertSoundOn, playChime, setAlertSound, setMatesAlwaysFocus } from '../lib/preferences'
+import { isAlertSoundOn, playChime, setAlertSound, setMateSettings } from '../lib/preferences'
 import type { RoomConfig } from '../lib/roomSize'
 import { Icon } from './Icon'
 import { Modal } from './Modal'
@@ -25,6 +25,7 @@ export function SettingsModal({ onClose, onOpenCharacters, roomConfig, onRoomCha
   // 같이 쓰는 방에서는 방을 만든 사람(방 주인)만 바꿀 수 있다
   const canChangeMates = !inRoom || room.ownerSeatNo === room.mySeatNo
   const [alwaysFocus, setAlwaysFocus] = useState(room.matesAlwaysFocus)
+  const [stay, setStay] = useState(room.matesStay)
   const [enabled, setEnabled] = useState(false)
   const [minutes, setMinutes] = useState('50')
   const [sound, setSound] = useState(isAlertSoundOn())
@@ -64,8 +65,10 @@ export function SettingsModal({ onClose, onOpenCharacters, roomConfig, onRoomCha
       setAlertSound(sound)
       if (canChangeMates) {
         // 새 방을 만들면 이 값으로 만들고, 지금 방에 남으면 지금 방에 바로 적용한다
-        setMatesAlwaysFocus(alwaysFocus)
-        if (inRoom && !roomChanged && alwaysFocus !== room.matesAlwaysFocus) await room.changeMatesAlwaysFocus(alwaysFocus)
+        const mates = { matesAlwaysFocus: alwaysFocus, matesStay: stay }
+        setMateSettings(mates)
+        const matesChanged = alwaysFocus !== room.matesAlwaysFocus || stay !== room.matesStay
+        if (inRoom && !roomChanged && matesChanged) await room.changeMateSettings(mates)
       }
       if (roomChanged && roomChoice && onRoomChange) {
         await onRoomChange(roomChoice)
@@ -132,7 +135,7 @@ export function SettingsModal({ onClose, onOpenCharacters, roomConfig, onRoomCha
               </span>
               <span className="setting-text">
                 <strong>알림 소리</strong>
-                <small>이 브라우저에만 저장돼요</small>
+                <small>켜면 알림 때 짧은 소리가 나요 (이 기기에서만 적용)</small>
               </span>
               <input type="checkbox" role="switch" className="switch" checked={sound} onChange={(e) => setSound(e.target.checked)} />
             </label>
@@ -148,17 +151,11 @@ export function SettingsModal({ onClose, onOpenCharacters, roomConfig, onRoomCha
           <div className="setting-group">
             <label className={`setting-row ${canChangeMates ? '' : 'is-disabled'}`}>
               <span className="setting-icon">
-                <Icon name="users" size={18} />
+                <Icon name="clock" size={18} />
               </span>
               <span className="setting-text">
-                <strong>메이트 계속 집중</strong>
-                <small>
-                  {!canChangeMates
-                    ? '방을 만든 사람만 바꿀 수 있어요'
-                    : room.realSeatCount > 1
-                      ? '메이트가 쉬지 않고 자리도 뜨지 않아요. 같은 방 모두에게 적용돼요'
-                      : '메이트가 쉬지 않고 자리도 뜨지 않아요'}
-                </small>
+                <strong>메이트 휴식 없음</strong>
+                <small>켜면 쉬지 않고 집중해요. 끄면 집중과 휴식을 오가요</small>
               </span>
               <input
                 type="checkbox"
@@ -169,6 +166,28 @@ export function SettingsModal({ onClose, onOpenCharacters, roomConfig, onRoomCha
                 onChange={(e) => setAlwaysFocus(e.target.checked)}
               />
             </label>
+            <label className={`setting-row ${canChangeMates ? '' : 'is-disabled'}`}>
+              <span className="setting-icon">
+                <Icon name="users" size={18} />
+              </span>
+              <span className="setting-text">
+                <strong>메이트 이탈 없음</strong>
+                <small>켜면 자리를 뜨지 않아요. 끄면 가끔 떠나고 새 메이트가 와요</small>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                className="switch"
+                checked={canChangeMates ? stay : room.matesStay}
+                disabled={!canChangeMates}
+                onChange={(e) => setStay(e.target.checked)}
+              />
+            </label>
+            {(!canChangeMates || room.realSeatCount > 1) && (
+              <div className="setting-sub">
+                <span>{canChangeMates ? '같은 방 모두에게 적용돼요' : '방을 만든 사람만 바꿀 수 있어요'}</span>
+              </div>
+            )}
           </div>
         </div>
 

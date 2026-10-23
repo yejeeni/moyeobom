@@ -74,12 +74,12 @@ public class MateScheduler {
     }
 
     /**
-     * 방 락을 잡은 상태에서 부른다. 메이트 계속 집중을 켜고 끈다.
-     * 켜면 쉬던 메이트는 바로 집중을 시작한다. 끄면 다음 전이부터 원래 규칙(휴식, 퇴장)으로 돌아간다.
+     * 방 락을 잡은 상태에서 부른다. 메이트 설정(계속 집중, 자리 유지)을 바꾼다.
+     * 계속 집중을 켜면 쉬던 메이트는 바로 집중을 시작한다. 그 밖의 변경은 다음 전이부터 적용된다.
      */
-    public void changeAlwaysFocus(Room room, boolean enabled) {
-        room.changeMatesAlwaysFocus(enabled);
-        if (!enabled) {
+    public void changeMateSettings(Room room, boolean alwaysFocus, boolean stay) {
+        room.changeMateSettings(alwaysFocus, stay);
+        if (!alwaysFocus) {
             return;
         }
         Instant now = clock.instant();
@@ -134,6 +134,11 @@ public class MateScheduler {
                     new CountsPayload(mate.getCompletedCount(), mate.getRemainingCount()));
         }
         if (room.isMatesAlwaysFocus()) {
+            // 쉬지 않으므로 자리를 뜨는 것도 집중이 끝날 때 정한다
+            if (!room.isMatesStay() && mateFactory.rollLeave()) {
+                leave(room, seat, now);
+                return;
+            }
             // 쉬지 않고 바로 다음 집중을 시작한다
             mate.changeState(SeatState.FOCUS, now);
             messenger.toRoom(room, RoomEventType.STATE_CHANGED, seat.getSeatNo(), new StatePayload(SeatState.FOCUS, now));
@@ -146,16 +151,21 @@ public class MateScheduler {
     }
 
     private void finishBreak(Room room, Seat seat, Occupant mate, Instant now) {
-        // 계속 집중인 방에서는 자리를 뜨지 않는다
-        if (!room.isMatesAlwaysFocus() && mateFactory.rollLeave()) {
-            seat.leave();
-            messenger.toRoom(room, RoomEventType.SEAT_LEFT, seat.getSeatNo(), null);
-            scheduleRefill(room, seat, now.plus(mateFactory.refillDelay()));
+        // 자리 유지인 방에서는 자리를 뜨지 않는다
+        if (!room.isMatesStay() && mateFactory.rollLeave()) {
+            leave(room, seat, now);
             return;
         }
         mate.changeState(SeatState.FOCUS, now);
         messenger.toRoom(room, RoomEventType.STATE_CHANGED, seat.getSeatNo(), new StatePayload(SeatState.FOCUS, now));
         scheduleTransition(room, seat, mate, now.plus(mateFactory.focusDuration()));
+    }
+
+    /** 메이트가 자리를 뜨고, 잠시 뒤 새 메이트가 채우도록 예약한다 */
+    private void leave(Room room, Seat seat, Instant now) {
+        seat.leave();
+        messenger.toRoom(room, RoomEventType.SEAT_LEFT, seat.getSeatNo(), null);
+        scheduleRefill(room, seat, now.plus(mateFactory.refillDelay()));
     }
 
     private void scheduleRefill(Room room, Seat seat, Instant at) {

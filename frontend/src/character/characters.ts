@@ -14,7 +14,7 @@ import type { CharacterParts, SeatState } from '../api/types'
  * - background        (선택) 책상까지 포함한 칸 전체 배경. 캐릭터와 같은 800x600 캔버스에 맞춰 그린다. 움짤도 된다.
  *
  * 그림은 800x600 투명 PNG이고 같은 위치 기준으로 그린다.
- * 기본 캐릭터는 public/characters/<id>/ 에 focus.gif, break.gif를 두고 BUILTIN_CHARACTERS에 한 줄 추가한다.
+ * 기본 캐릭터는 public/characters/<id>/ 에 focus, break 움짤(GIF 또는 움직이는 WebP 중 작은 쪽)을 두고 BUILTIN_CHARACTERS에 한 줄 추가한다.
  * 사용자가 등록한 캐릭터는 브라우저(IndexedDB)에만 저장된다(library.ts).
  */
 
@@ -115,18 +115,18 @@ export function describeMissing(names: FrameName[]): string[] {
   return notes
 }
 
-/** 집중·휴식마다 GIF 한 장인 기본 캐릭터. GIF라서 칸을 꽉 채운다 */
-function builtinGif(id: string, name: string): CharacterAsset {
-  const frames = resolveFrames({ focus: [`/characters/${id}/focus.gif`], break: [`/characters/${id}/break.gif`] })!
+/** 집중·휴식마다 움짤 한 장인 기본 캐릭터. 장면째 그린 움짤이라 칸을 꽉 채운다. 파일 형식은 더 작은 쪽을 쓴다 */
+function builtinMotion(id: string, name: string, ext: 'gif' | 'webp'): CharacterAsset {
+  const frames = resolveFrames({ focus: [`/characters/${id}/focus.${ext}`], break: [`/characters/${id}/break.${ext}`] })!
   return { id: `builtin:${id}`, name, source: 'builtin', frameMs: DEFAULT_FRAME_MS, frames, background: null, stills: {}, fillsSeat: true }
 }
 
 // TODO 공개 배포 전에 바꾼다. 저작권이 있는 그림(치이카와)이라 비공개 테스트에서 자리를 채우는 용도로만 쓴다
 export const BUILTIN_CHARACTERS: CharacterAsset[] = [
-  builtinGif('chiikawa', '치이카와'),
-  builtinGif('hachiware', '하치와레'),
-  builtinGif('usagi', '우사기'),
-  builtinGif('chiikawa2', '치이카와 2'),
+  builtinMotion('chiikawa', '치이카와', 'webp'),
+  builtinMotion('hachiware', '하치와레', 'webp'),
+  builtinMotion('usagi', '우사기', 'gif'),
+  builtinMotion('chiikawa2', '치이카와 2', 'gif'),
 ]
 
 /** 서버가 준 파츠 번호로 기본 캐릭터를 고른다(소개 화면 미리보기용). */

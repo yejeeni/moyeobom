@@ -75,15 +75,24 @@ export interface RoomEnter {
   realSeatCount: number
   seatNo: number
   nickname: string
-  /** 가상 메이트가 쉬지 않고 자리를 뜨지도 않는다 */
+  /** 가상 메이트가 쉬지 않고 계속 집중한다 */
   matesAlwaysFocus: boolean
+  /** 가상 메이트가 자리를 뜨지 않는다 */
+  matesStay: boolean
   /** 내가 방 주인(설정을 바꿀 수 있는 사람)인지 */
   owner: boolean
+}
+
+/** 메이트 설정. 휴식 없음(쉬지 않고 집중)과 이탈 없음(떠나지 않음)는 따로 켜고 끈다 */
+export interface MateSettings {
+  matesAlwaysFocus: boolean
+  matesStay: boolean
 }
 
 /** 방 설정. 방 주인만 바꿀 수 있다 */
 export interface RoomSettings {
   matesAlwaysFocus: boolean
+  matesStay: boolean
   /** 방 주인의 자리 번호 */
   ownerSeatNo: number
 }
@@ -138,6 +147,7 @@ export interface SnapshotPayload {
   /** waiting: 비어 있는 실제 사람 자리(초대 대기) */
   seats: { seatNo: number; occupant: Occupant | null; waiting: boolean }[]
   matesAlwaysFocus: boolean
+  matesStay: boolean
   ownerSeatNo: number
 }
 

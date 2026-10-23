@@ -131,17 +131,19 @@ class RoomWebSocketTest extends IntegrationTestSupport {
     }
 
     @Test
-    void 만들_때_메이트_계속_집중을_고르면_처음부터_쉬는_메이트가_없다() throws Exception {
+    void 만들_때_메이트_설정을_고르면_처음부터_적용된다() throws Exception {
         startSprint(guest);
         Map<String, Object> room = new Result(mockMvc.perform(post("/api/v1/rooms").header("X-Guest-Id", guest)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"virtualSeats\": 8, \"realSeats\": 1, \"matesAlwaysFocus\": true}")))
+                .content("{\"virtualSeats\": 8, \"realSeats\": 1, \"matesAlwaysFocus\": true, \"matesStay\": true}")))
                 .andExpect(status().isCreated()).andReturnMap();
         assertThat(room.get("matesAlwaysFocus")).isEqualTo(true);
+        assertThat(room.get("matesStay")).isEqualTo(true);
         assertThat(room.get("owner")).isEqualTo(true);
 
         Map<String, Object> snapshot = poll(subscribe(connect(guest), "/user/queue/room-snapshot"), e -> true);
         assertThat((Boolean) JsonPath.read(snapshot, "$.payload.matesAlwaysFocus")).isTrue();
+        assertThat((Boolean) JsonPath.read(snapshot, "$.payload.matesStay")).isTrue();
         assertThat((Integer) JsonPath.read(snapshot, "$.payload.ownerSeatNo")).isEqualTo(room.get("seatNo"));
         List<String> states = JsonPath.read(snapshot, "$.payload.seats[?(@.seatNo != %d)].occupant.state"
                 .formatted((Integer) room.get("seatNo")));
@@ -149,10 +151,11 @@ class RoomWebSocketTest extends IntegrationTestSupport {
     }
 
     @Test
-    void 같이_쓰는_방에서는_만든_사람만_메이트_계속_집중을_바꾸고_모두에게_알린다() throws Exception {
+    void 같이_쓰는_방에서는_만든_사람만_메이트_설정을_바꾸고_보낸_항목만_바뀌며_모두에게_알린다() throws Exception {
         startSprint(guest);
         Map<String, Object> room = created(guest, 3, 2);
         assertThat(room.get("matesAlwaysFocus")).isEqualTo(false);
+        assertThat(room.get("matesStay")).isEqualTo(false);
         String friend = issueGuest();
         startSprint(friend);
         Map<String, Object> joined = join(friend, (String) room.get("code")).andReturnMap();
@@ -160,17 +163,25 @@ class RoomWebSocketTest extends IntegrationTestSupport {
         BlockingQueue<Map<String, Object>> friendTopic =
                 subscribe(connect(friend), "/topic/rooms/" + room.get("roomId"));
 
-        changeSettings(friend, true)
+        changeSettings(friend, "{\"matesStay\": true}")
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("NOT_ROOM_OWNER"));
 
-        changeSettings(guest, true)
+        // 보낸 항목만 바뀌고 나머지는 그대로다
+        changeSettings(guest, "{\"matesStay\": true}")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.matesAlwaysFocus").value(true))
+                .andExpect(jsonPath("$.matesAlwaysFocus").value(false))
+                .andExpect(jsonPath("$.matesStay").value(true))
                 .andExpect(jsonPath("$.ownerSeatNo").value(room.get("seatNo")));
         Map<String, Object> changed = poll(friendTopic, e -> "ROOM_SETTINGS_CHANGED".equals(e.get("type")));
-        assertThat((Boolean) JsonPath.read(changed, "$.payload.matesAlwaysFocus")).isTrue();
-        assertThat(current(friend).get("matesAlwaysFocus")).isEqualTo(true);
+        assertThat((Boolean) JsonPath.read(changed, "$.payload.matesStay")).isTrue();
+        assertThat((Boolean) JsonPath.read(changed, "$.payload.matesAlwaysFocus")).isFalse();
+
+        changeSettings(guest, "{\"matesAlwaysFocus\": true}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.matesAlwaysFocus").value(true))
+                .andExpect(jsonPath("$.matesStay").value(true));
+        assertThat(current(friend)).containsEntry("matesAlwaysFocus", true).containsEntry("matesStay", true);
     }
 
     @Test
@@ -188,12 +199,12 @@ class RoomWebSocketTest extends IntegrationTestSupport {
         Map<String, Object> handedOver = poll(friendTopic, e -> "ROOM_SETTINGS_CHANGED".equals(e.get("type")));
         assertThat((Integer) JsonPath.read(handedOver, "$.payload.ownerSeatNo")).isEqualTo(joined.get("seatNo"));
         assertThat(current(friend).get("owner")).isEqualTo(true);
-        changeSettings(friend, true).andExpect(status().isOk());
+        changeSettings(friend, "{\"matesAlwaysFocus\": true}").andExpect(status().isOk());
     }
 
     @Test
     void 방에_없으면_설정을_바꿀_수_없다() throws Exception {
-        changeSettings(guest, true)
+        changeSettings(guest, "{\"matesAlwaysFocus\": true}")
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ROOM_NOT_FOUND"));
     }
@@ -334,10 +345,9 @@ class RoomWebSocketTest extends IntegrationTestSupport {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"code\": \"" + code + "\"}")));
     }
 
-    private Result changeSettings(String guestId, boolean matesAlwaysFocus) throws Exception {
+    private Result changeSettings(String guestId, String body) throws Exception {
         return new Result(mockMvc.perform(patch("/api/v1/rooms/current/settings").header("X-Guest-Id", guestId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"matesAlwaysFocus\": " + matesAlwaysFocus + "}")));
+                .contentType(MediaType.APPLICATION_JSON).content(body)));
     }
 
     private Map<String, Object> current(String guestId) throws Exception {

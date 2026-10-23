@@ -85,7 +85,8 @@ public class RoomService {
     /**
      * 새 열람실을 만들고 들어간다. 이미 다른 방에 있으면 그 방에서 먼저 나온다.
      */
-    public RoomEnterResponse create(Long guestId, int virtualSeats, int realSeats, boolean matesAlwaysFocus) {
+    public RoomEnterResponse create(Long guestId, int virtualSeats, int realSeats, boolean matesAlwaysFocus,
+                                    boolean matesStay) {
         int total = virtualSeats + realSeats;
         if (realSeats < 1 || virtualSeats < 0 || total > Room.MAX_SEAT_COUNT) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "실제 자리는 1명 이상, 합계는 9명까지 고를 수 있어요.");
@@ -102,7 +103,7 @@ public class RoomService {
             room.withLock(() -> {
                 room.addMember(guestId, pickWaitingSeat(room), me);
                 room.assignOwner(guestId);
-                mateScheduler.changeAlwaysFocus(room, matesAlwaysFocus);
+                mateScheduler.changeMateSettings(room, matesAlwaysFocus, matesStay);
                 mateScheduler.populate(room, clock.instant());
                 holdIfDisconnected(room, guestId);
             });
@@ -159,8 +160,8 @@ public class RoomService {
                 room.waitingSeats().size()));
     }
 
-    /** 방 설정을 바꾸고 방 전체에 알린다. 방 주인만 바꿀 수 있다 */
-    public RoomSettingsView changeSettings(Long guestId, boolean matesAlwaysFocus) {
+    /** 방 설정을 바꾸고 방 전체에 알린다. 방 주인만 바꿀 수 있고, null인 항목은 그대로 둔다 */
+    public RoomSettingsView changeSettings(Long guestId, Boolean matesAlwaysFocus, Boolean matesStay) {
         Room room = roomRegistry.findByGuestId(guestId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
         return room.withLock(() -> {
@@ -170,7 +171,9 @@ public class RoomService {
             if (!room.isOwner(guestId)) {
                 throw new BusinessException(ErrorCode.NOT_ROOM_OWNER);
             }
-            mateScheduler.changeAlwaysFocus(room, matesAlwaysFocus);
+            mateScheduler.changeMateSettings(room,
+                    matesAlwaysFocus != null ? matesAlwaysFocus : room.isMatesAlwaysFocus(),
+                    matesStay != null ? matesStay : room.isMatesStay());
             RoomSettingsView settings = settingsOf(room);
             messenger.toRoom(room, RoomEventType.ROOM_SETTINGS_CHANGED, null, settings);
             return settings;
@@ -315,7 +318,7 @@ public class RoomService {
             Seat seat = room.seatOf(guestId).orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
             return new RoomEnterResponse(room.getRoomId(), room.getCode(), room.getSeatCount(), room.getRealSeatCount(),
                     seat.getSeatNo(), seat.occupant().map(Occupant::getNickname).orElseThrow(),
-                    room.isMatesAlwaysFocus(), room.isOwner(guestId));
+                    room.isMatesAlwaysFocus(), room.isMatesStay(), room.isOwner(guestId));
         });
     }
 
@@ -327,11 +330,11 @@ public class RoomService {
         int mySeatNo = room.seatOf(guestId).map(Seat::getSeatNo).orElse(0);
         return messenger.event(RoomEventType.ROOM_SNAPSHOT, room.getRoomId(), null,
                 new SnapshotPayload(clock.instant(), room.getCode(), room.getSeatCount(), mySeatNo, seats,
-                        room.isMatesAlwaysFocus(), room.ownerSeatNo()));
+                        room.isMatesAlwaysFocus(), room.isMatesStay(), room.ownerSeatNo()));
     }
 
     private RoomSettingsView settingsOf(Room room) {
-        return new RoomSettingsView(room.isMatesAlwaysFocus(), room.ownerSeatNo());
+        return new RoomSettingsView(room.isMatesAlwaysFocus(), room.isMatesStay(), room.ownerSeatNo());
     }
 
     private String newRoomId() {

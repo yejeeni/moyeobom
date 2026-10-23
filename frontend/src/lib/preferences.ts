@@ -1,3 +1,5 @@
+import type { MateSettings } from '../api/types'
+
 // 알림 소리는 서버가 아니라 브라우저에만 저장한다
 const SOUND_KEY = 'moyeobom.alertSound'
 
@@ -17,20 +19,25 @@ export function setAlertSound(on: boolean) {
   }
 }
 
-// 새 열람실을 만들 때 쓸 메이트 계속 집중. 마지막으로 고른 값을 기억한다
+// 새 열람실을 만들 때 쓸 메이트 설정. 마지막으로 고른 값을 기억한다
 const ALWAYS_FOCUS_KEY = 'moyeobom.matesAlwaysFocus'
+const STAY_KEY = 'moyeobom.matesStay'
 
-export function isMatesAlwaysFocus(): boolean {
+export function getMateSettings(): MateSettings {
   try {
-    return localStorage.getItem(ALWAYS_FOCUS_KEY) === 'on'
+    const alwaysFocus = localStorage.getItem(ALWAYS_FOCUS_KEY) === 'on'
+    const stay = localStorage.getItem(STAY_KEY)
+    // 예전 '계속 집중'은 이탈 없음까지 포함했으므로, 이탈 없음를 따로 고른 적 없으면 그 값을 따른다
+    return { matesAlwaysFocus: alwaysFocus, matesStay: stay === null ? alwaysFocus : stay === 'on' }
   } catch {
-    return false
+    return { matesAlwaysFocus: false, matesStay: false }
   }
 }
 
-export function setMatesAlwaysFocus(on: boolean) {
+export function setMateSettings({ matesAlwaysFocus, matesStay }: MateSettings) {
   try {
-    localStorage.setItem(ALWAYS_FOCUS_KEY, on ? 'on' : 'off')
+    localStorage.setItem(ALWAYS_FOCUS_KEY, matesAlwaysFocus ? 'on' : 'off')
+    localStorage.setItem(STAY_KEY, matesStay ? 'on' : 'off')
   } catch {
     // 무시
   }

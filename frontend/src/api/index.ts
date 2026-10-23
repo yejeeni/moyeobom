@@ -10,6 +10,7 @@ import type {
   Review,
   RoomEnter,
   RoomLookup,
+  MateSettings,
   RoomSettings,
   Setting,
   SprintView,
@@ -40,10 +41,10 @@ export const api = {
   stopFocus: (reason: 'STOPPED' | 'BREAK') => request<MyStatus>('POST', '/focus/stop', { reason }),
   currentFocus: () => request<MyStatus>('GET', '/focus/current'),
 
-  createRoom: (virtualSeats: number, realSeats: number, matesAlwaysFocus: boolean) =>
-    request<RoomEnter>('POST', '/rooms', { virtualSeats, realSeats, matesAlwaysFocus }),
-  changeRoomSettings: (matesAlwaysFocus: boolean) =>
-    request<RoomSettings>('PATCH', '/rooms/current/settings', { matesAlwaysFocus }),
+  createRoom: (virtualSeats: number, realSeats: number, mates: MateSettings) =>
+    request<RoomEnter>('POST', '/rooms', { virtualSeats, realSeats, ...mates }),
+  /** 보낸 항목만 바뀐다 */
+  changeRoomSettings: (change: Partial<MateSettings>) => request<RoomSettings>('PATCH', '/rooms/current/settings', change),
   joinRoom: (code: string) => request<RoomEnter>('POST', '/rooms/join', { code }),
   lookupRoom: (code: string) => request<RoomLookup>('GET', `/rooms/lookup?code=${encodeURIComponent(code)}`),
   currentRoom: () => request<RoomEnter>('GET', '/rooms/current'),

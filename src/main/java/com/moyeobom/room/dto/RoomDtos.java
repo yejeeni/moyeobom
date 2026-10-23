@@ -21,17 +21,19 @@ public final class RoomDtos {
      *
      * @param virtualSeats 가상 메이트 자리 수(0~8)
      * @param realSeats    실제 사람 자리 수(나 포함 1~9)
-     * @param matesAlwaysFocus 가상 메이트가 쉬지 않고 자리를 뜨지도 않는다. 없으면 false
+     * @param matesAlwaysFocus 가상 메이트가 쉬지 않고 계속 집중한다. 없으면 false
+     * @param matesStay        가상 메이트가 자리를 뜨지 않는다. 없으면 false
      */
     public record RoomCreateRequest(
             @NotNull @Min(0) @Max(Room.MAX_SEAT_COUNT - 1) Integer virtualSeats,
             @NotNull @Min(1) @Max(Room.MAX_SEAT_COUNT) Integer realSeats,
-            Boolean matesAlwaysFocus
+            Boolean matesAlwaysFocus,
+            Boolean matesStay
     ) {
     }
 
-    /** 방 설정 바꾸기. 방 주인만 바꿀 수 있다 */
-    public record RoomSettingsRequest(@NotNull Boolean matesAlwaysFocus) {
+    /** 방 설정 바꾸기. 방 주인만 바꿀 수 있고, 보낸 항목만 바꾼다 */
+    public record RoomSettingsRequest(Boolean matesAlwaysFocus, Boolean matesStay) {
     }
 
     /**
@@ -39,7 +41,7 @@ public final class RoomDtos {
      *
      * @param ownerSeatNo 설정을 바꿀 수 있는 사람(방 주인)의 자리 번호
      */
-    public record RoomSettingsView(boolean matesAlwaysFocus, int ownerSeatNo) {
+    public record RoomSettingsView(boolean matesAlwaysFocus, boolean matesStay, int ownerSeatNo) {
     }
 
     public record RoomJoinRequest(@NotBlank String code) {
@@ -53,7 +55,7 @@ public final class RoomDtos {
      * @param owner         내가 방 주인(설정을 바꿀 수 있는 사람)인지
      */
     public record RoomEnterResponse(String roomId, String code, int seatCount, int realSeatCount, int seatNo,
-                                    String nickname, boolean matesAlwaysFocus, boolean owner) {
+                                    String nickname, boolean matesAlwaysFocus, boolean matesStay, boolean owner) {
     }
 
     /** 코드로 들어가기 전에 확인하는 열람실 정보 */
@@ -97,7 +99,7 @@ public final class RoomDtos {
     }
 
     public record SnapshotPayload(Instant serverTime, String code, int seatCount, int mySeatNo, List<SeatView> seats,
-                                  boolean matesAlwaysFocus, int ownerSeatNo) {
+                                  boolean matesAlwaysFocus, boolean matesStay, int ownerSeatNo) {
     }
 
     /** 실제 사람이 나가 자리가 다시 초대 대기가 되면 waiting이 true다. 가상 메이트가 나가면 본문이 없다 */

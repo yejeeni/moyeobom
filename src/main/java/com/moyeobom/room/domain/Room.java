@@ -42,9 +42,12 @@ public class Room {
     private boolean closed;
     /** 방 설정을 바꿀 수 있는 사람. 처음에는 만든 사람이고, 나가면 남은 사람에게 넘어간다 */
     private Long ownerId;
-    /** 가상 메이트가 쉬지 않고 자리를 뜨지도 않는다 */
+    /** 가상 메이트가 쉬지 않고 계속 집중한다 */
     @Getter
     private boolean matesAlwaysFocus;
+    /** 가상 메이트가 자리를 뜨지 않는다 */
+    @Getter
+    private boolean matesStay;
 
     private Room(String roomId, String code, List<Seat> seats) {
         this.roomId = roomId;
@@ -171,9 +174,10 @@ public class Room {
         return ownerId == null ? 0 : seatByMember.getOrDefault(ownerId, 0);
     }
 
-    /** 메이트 계속 집중을 켜고 끈다(락 안에서). 메이트 상태는 MateScheduler가 맞춘다 */
-    public void changeMatesAlwaysFocus(boolean matesAlwaysFocus) {
+    /** 메이트 설정을 바꾼다(락 안에서). 메이트 상태는 MateScheduler가 맞춘다 */
+    public void changeMateSettings(boolean matesAlwaysFocus, boolean matesStay) {
         this.matesAlwaysFocus = matesAlwaysFocus;
+        this.matesStay = matesStay;
     }
 
     /** 자리에 앉은 사람 수(실제 + 가상) */

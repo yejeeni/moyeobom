@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { CharacterLibraryProvider } from './character/CharacterLibrary'
 import { ToastProvider } from './components/Toasts'
+import { UpdateBanner } from './components/UpdateBanner'
 import { Home } from './pages/Home'
 import { Room } from './pages/Room'
 import { RoomProvider } from './room/RoomContext'
@@ -19,6 +20,7 @@ export default function App() {
               <Route path="/r/:code" element={<InviteLink />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            <UpdateBanner />
           </RoomProvider>
         </CharacterLibraryProvider>
       </ToastProvider>

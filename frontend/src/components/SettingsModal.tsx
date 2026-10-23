@@ -132,7 +132,7 @@ export function SettingsModal({ onClose, onOpenCharacters, roomConfig, onRoomCha
               </span>
               <span className="setting-text">
                 <strong>알림 소리</strong>
-                <small>이 브라우저에만 저장돼요</small>
+                <small>켜면 알림 때 짧은 소리가 나요 (이 기기에서만 적용)</small>
               </span>
               <input type="checkbox" role="switch" className="switch" checked={sound} onChange={(e) => setSound(e.target.checked)} />
             </label>

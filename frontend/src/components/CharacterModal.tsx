@@ -152,7 +152,7 @@ export function CharacterModal({ onClose }: { onClose: () => void }) {
                 }}
               >
                 <Icon name="shuffle" size={14} />
-                지금 다시 뽑기
+                다시 뽑기
               </button>
             </div>
           </div>

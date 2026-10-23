@@ -6,7 +6,7 @@ import { useCharacterLibrary, type CharacterPrefs } from './CharacterLibrary'
 /**
  * 열람실 자리마다 캐릭터를 무작위로 배정하고, 방 ID별로 기억해 새로고침이나 재연결 뒤에도 같은 모습을 유지한다.
  * 자리 주인이 바뀌면(퇴장 후 새 메이트) 그 자리만 새로 뽑는다. 방이 바뀌면 모두 새로 뽑는다.
- * 자리 칸에서 직접 고른 캐릭터(pins)는 무작위 규칙과 '지금 다시 뽑기'보다 앞선다. 내 자리는 prefs.myCharacterId로 고른다.
+ * 자리 칸에서 직접 고른 캐릭터(pins)는 무작위 규칙과 '다시 뽑기'보다 앞선다. 내 자리는 prefs.myCharacterId로 고른다.
  */
 
 const STORAGE_KEY = 'moyeobom.characterAssignment'

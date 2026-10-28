@@ -203,6 +203,77 @@ class RoomWebSocketTest extends IntegrationTestSupport {
     }
 
     @Test
+    void 방이_사라진_뒤_같은_코드로_복구하면_같은_코드와_구성과_메이트_설정으로_다시_열린다() throws Exception {
+        startSprint(guest);
+
+        Map<String, Object> restored = restore(guest, "RSTAB2", 3, 2, true, false, true)
+                .andExpect(status().isOk()).andReturnMap();
+
+        assertThat(restored).containsEntry("code", "RSTAB2").containsEntry("seatCount", 5)
+                .containsEntry("realSeatCount", 2).containsEntry("matesAlwaysFocus", true)
+                .containsEntry("matesStay", false).containsEntry("owner", true);
+        assertThat(current(guest).get("roomId")).isEqualTo(restored.get("roomId"));
+    }
+
+    @Test
+    void 같이_쓰던_사람은_같은_코드로_복구하면_같은_방에_모이고_원래_주인이_주인을_돌려받는다() throws Exception {
+        startSprint(guest);
+        String friend = issueGuest();
+        startSprint(friend);
+
+        // 친구가 먼저 돌아와 방을 다시 열고, 원래 주인은 나중에 돌아온다
+        Map<String, Object> friendRoom = restore(friend, "RSTCD3", 2, 2, false, false, false)
+                .andExpect(status().isOk()).andReturnMap();
+        assertThat(friendRoom.get("owner")).isEqualTo(true);
+        BlockingQueue<Map<String, Object>> friendTopic =
+                subscribe(connect(friend), "/topic/rooms/" + friendRoom.get("roomId"));
+
+        Map<String, Object> hostRoom = restore(guest, "RSTCD3", 2, 2, false, false, true)
+                .andExpect(status().isOk()).andReturnMap();
+
+        assertThat(hostRoom.get("roomId")).isEqualTo(friendRoom.get("roomId"));
+        assertThat(hostRoom.get("owner")).isEqualTo(true);
+        assertThat(current(friend).get("owner")).isEqualTo(false);
+        Map<String, Object> handedBack = poll(friendTopic, e -> "ROOM_SETTINGS_CHANGED".equals(e.get("type")));
+        assertThat((Integer) JsonPath.read(handedBack, "$.payload.ownerSeatNo")).isEqualTo(hostRoom.get("seatNo"));
+    }
+
+    @Test
+    void 복구로는_지금_열려_있는_보통_방에_들어갈_수_없고_새_코드로_열린다() throws Exception {
+        startSprint(guest);
+        Map<String, Object> live = created(guest, 2, 2);
+        String stranger = issueGuest();
+        startSprint(stranger);
+
+        Map<String, Object> restored = restore(stranger, (String) live.get("code"), 2, 2, false, false, true)
+                .andExpect(status().isOk()).andReturnMap();
+
+        assertThat(restored.get("roomId")).isNotEqualTo(live.get("roomId"));
+        assertThat(restored.get("code")).isNotEqualTo(live.get("code"));
+    }
+
+    @Test
+    void 서버가_켜진_뒤_복구_가능한_시간이_지나면_410() throws Exception {
+        startSprint(guest);
+        clock.set(START.plus(Duration.ofMinutes(11)));
+
+        restore(guest, "RSTEF4", 2, 1, false, false, true)
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.code").value("ROOM_RESTORE_EXPIRED"));
+    }
+
+    @Test
+    void 이미_방에_있으면_복구하지_않고_지금_방을_돌려준다() throws Exception {
+        startSprint(guest);
+        Map<String, Object> live = created(guest, 2, 1);
+
+        Map<String, Object> restored = restore(guest, "RSTGH5", 3, 1, false, false, true)
+                .andExpect(status().isOk()).andReturnMap();
+
+        assertThat(restored.get("roomId")).isEqualTo(live.get("roomId"));
+    }
+
+    @Test
     void 방에_없으면_설정을_바꿀_수_없다() throws Exception {
         changeSettings(guest, "{\"matesAlwaysFocus\": true}")
                 .andExpect(status().isNotFound())
@@ -343,6 +414,15 @@ class RoomWebSocketTest extends IntegrationTestSupport {
     private Result join(String guestId, String code) throws Exception {
         return new Result(mockMvc.perform(post("/api/v1/rooms/join").header("X-Guest-Id", guestId)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"code\": \"" + code + "\"}")));
+    }
+
+    private Result restore(String guestId, String code, int virtualSeats, int realSeats, boolean alwaysFocus,
+                           boolean stay, boolean wasOwner) throws Exception {
+        return new Result(mockMvc.perform(post("/api/v1/rooms/restore").header("X-Guest-Id", guestId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(("{\"code\": \"%s\", \"virtualSeats\": %d, \"realSeats\": %d, \"matesAlwaysFocus\": %b, "
+                        + "\"matesStay\": %b, \"wasOwner\": %b}")
+                        .formatted(code, virtualSeats, realSeats, alwaysFocus, stay, wasOwner))));
     }
 
     private Result changeSettings(String guestId, String body) throws Exception {

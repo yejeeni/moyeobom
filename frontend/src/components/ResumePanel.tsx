@@ -3,6 +3,7 @@ import { api } from '../api'
 import { isApiError } from '../api/client'
 import type { RoomEnter, SprintView } from '../api/types'
 import { formatDuration } from '../lib/time'
+import { clearLastRoom } from '../lib/lastRoom'
 import { getRoomConfig } from '../lib/roomSize'
 import { RoomChoice, type CodeStatus, type RoomChoiceValue } from './RoomChoice'
 
@@ -52,6 +53,7 @@ export function ResumePanel({ sprint, inviteCode, busy, onResume, onEnter, onFin
     setLeaving(true)
     try {
       await api.leaveRoom()
+      clearLastRoom()
       setCurrent(null)
     } finally {
       setLeaving(false)

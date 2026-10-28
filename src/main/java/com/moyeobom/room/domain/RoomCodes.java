@@ -22,6 +22,11 @@ public final class RoomCodes {
         return code.toString();
     }
 
+    /** 다듬은 코드가 만들 수 있는 코드 모양(정해진 글자 6자리)인지 */
+    public static boolean isValid(String code) {
+        return code.length() == LENGTH && code.chars().allMatch(c -> ALPHABET.indexOf(c) >= 0);
+    }
+
     /** 사용자가 입력한 코드를 비교할 수 있게 다듬는다: 공백·하이픈을 지우고 대문자로 */
     public static String normalize(String input) {
         return input == null ? "" : input.replaceAll("[^0-9A-Za-z]", "").toUpperCase(Locale.ROOT);

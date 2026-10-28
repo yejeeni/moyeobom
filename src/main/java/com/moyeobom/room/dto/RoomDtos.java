@@ -48,6 +48,21 @@ public final class RoomDtos {
     }
 
     /**
+     * 서버가 다시 켜져 사라진 방을 같은 코드와 구성으로 다시 연다. 화면이 마지막 방 정보를 기억해 두었다가 보낸다.
+     *
+     * @param wasOwner 사라진 방의 주인이었는지. 같은 코드로 먼저 복구된 방에 들어가면 주인을 돌려받는다
+     */
+    public record RoomRestoreRequest(
+            @NotBlank String code,
+            @NotNull @Min(0) @Max(Room.MAX_SEAT_COUNT - 1) Integer virtualSeats,
+            @NotNull @Min(1) @Max(Room.MAX_SEAT_COUNT) Integer realSeats,
+            Boolean matesAlwaysFocus,
+            Boolean matesStay,
+            Boolean wasOwner
+    ) {
+    }
+
+    /**
      * 내가 있는 열람실.
      *
      * @param code          입장 코드. 실제 자리가 2개 이상이면 다른 사람에게 나눠 준다

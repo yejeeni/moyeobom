@@ -6,6 +6,7 @@ import { useToast } from '../components/Toasts'
 import { getGuestId } from '../lib/guest'
 import { getMateSettings, isAlertSoundOn, playChime, setMateSettings } from '../lib/preferences'
 import { isApiError } from '../api/client'
+import { clearLastRoom, getLastRoom, setLastRoom } from '../lib/lastRoom'
 import { getRoomConfig, type RoomConfig } from '../lib/roomSize'
 
 export type Connection = 'idle' | 'connecting' | 'connected' | 'reconnecting'
@@ -264,6 +265,26 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         if (!isApiError(e, 'ROOM_NOT_FOUND')) throw e
         const hadRoom = roomIdRef.current !== null
+        // 서버가 다시 켜져 방이 사라졌으면 같은 코드로 되살린다. 같이 쓰던 사람들도 같은 방에 다시 모인다
+        const last = getLastRoom()
+        if (last) {
+          try {
+            const restored = attach(await api.restoreRoom(last))
+            if (restored.code === last.code) {
+              toast.show(
+                last.realSeats > 1
+                  ? `서버가 업데이트되어 같은 코드(${last.code})의 열람실로 다시 모였어요`
+                  : '서버가 업데이트되어 열람실을 다시 열었어요',
+              )
+            } else if (hadRoom) {
+              toast.show('열람실이 닫혀 새 열람실을 열었어요')
+            }
+            return restored
+          } catch (restoreError) {
+            // 되살릴 수 있는 시간이 지났으면 새 방을 연다
+            if (!isApiError(restoreError, 'ROOM_RESTORE_EXPIRED')) throw restoreError
+          }
+        }
         const created = await create(getRoomConfig())
         if (hadRoom) toast.show('열람실이 닫혀 새 열람실을 열었어요')
         return created
@@ -280,6 +301,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }, [enter])
 
   const leave = useCallback(() => {
+    clearLastRoom()
     const client = clientRef.current
     clientRef.current = null
     roomIdRef.current = null
@@ -296,6 +318,19 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     settingsRef.current = settings
     setState((s) => ({ ...s, ...settings }))
   }, [])
+
+  // 방이 사라졌을 때 되살릴 수 있게 지금 방의 코드·구성·설정을 기억한다
+  useEffect(() => {
+    if (!state.roomId || !state.code || state.mySeatNo === null) return
+    setLastRoom({
+      code: state.code,
+      virtualSeats: state.seatCount - state.realSeatCount,
+      realSeats: state.realSeatCount,
+      matesAlwaysFocus: state.matesAlwaysFocus,
+      matesStay: state.matesStay,
+      wasOwner: state.ownerSeatNo === state.mySeatNo,
+    })
+  }, [state.roomId, state.code, state.seatCount, state.realSeatCount, state.matesAlwaysFocus, state.matesStay, state.ownerSeatNo, state.mySeatNo])
 
   useEffect(() => () => void clientRef.current?.deactivate(), [])
 

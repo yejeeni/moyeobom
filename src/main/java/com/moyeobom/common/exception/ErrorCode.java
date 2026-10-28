@@ -20,6 +20,7 @@ public enum ErrorCode {
     ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "열람실을 찾을 수 없습니다. 코드를 확인해 주세요."),
     ROOM_FULL(HttpStatus.CONFLICT, "열람실 자리가 모두 찼습니다."),
     TOO_MANY_CODE_ATTEMPTS(HttpStatus.TOO_MANY_REQUESTS, "없는 코드를 여러 번 입력했어요. 잠시 뒤에 다시 시도해 주세요."),
+    ROOM_RESTORE_EXPIRED(HttpStatus.GONE, "서버가 다시 켜진 지 오래되어 열람실을 되살릴 수 없어요. 새 열람실을 열어 주세요."),
     NOT_ROOM_OWNER(HttpStatus.FORBIDDEN, "방을 만든 사람만 바꿀 수 있어요."),
     ROOM_LIMIT_REACHED(HttpStatus.SERVICE_UNAVAILABLE, "지금은 열람실이 너무 많아요. 잠시 뒤에 다시 시도하거나 코드로 들어가 주세요."),
     TOO_MANY_GUESTS(HttpStatus.TOO_MANY_REQUESTS, "짧은 시간에 너무 많이 접속했어요. 잠시 뒤에 다시 시도해 주세요."),

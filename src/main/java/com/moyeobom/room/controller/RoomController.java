@@ -5,6 +5,7 @@ import com.moyeobom.room.dto.RoomDtos.RoomCreateRequest;
 import com.moyeobom.room.dto.RoomDtos.RoomEnterResponse;
 import com.moyeobom.room.dto.RoomDtos.RoomJoinRequest;
 import com.moyeobom.room.dto.RoomDtos.RoomLookupResponse;
+import com.moyeobom.room.dto.RoomDtos.RoomRestoreRequest;
 import com.moyeobom.room.dto.RoomDtos.RoomSettingsRequest;
 import com.moyeobom.room.dto.RoomDtos.RoomSettingsView;
 import com.moyeobom.room.service.CodeAttemptLimiter;
@@ -64,6 +65,18 @@ public class RoomController {
     public RoomEnterResponse join(@CurrentGuest Long guestId, @Valid @RequestBody RoomJoinRequest request,
                                   HttpServletRequest http) {
         return codeAttemptLimiter.attempt(http.getRemoteAddr(), () -> roomService.join(guestId, request.code()));
+    }
+
+    @Operation(summary = "사라진 열람실 복구", description = """
+            서버가 다시 켜져 방이 사라졌을 때 같은 코드·구성·메이트 설정으로 다시 연다. 같이 쓰던 사람들이 각자 부르면 같은 방에 모인다.
+            이미 방에 있으면 그 방을 돌려준다. 같은 코드의 보통 방이 열려 있으면 새 코드로 연다.
+            서버가 켜진 뒤 일정 시간(기본 10분)이 지나면 410 ROOM_RESTORE_EXPIRED
+            """)
+    @PostMapping("/restore")
+    public RoomEnterResponse restore(@CurrentGuest Long guestId, @Valid @RequestBody RoomRestoreRequest request) {
+        return roomService.restore(guestId, request.code(), request.virtualSeats(), request.realSeats(),
+                Boolean.TRUE.equals(request.matesAlwaysFocus()), Boolean.TRUE.equals(request.matesStay()),
+                Boolean.TRUE.equals(request.wasOwner()));
     }
 
     @Operation(summary = "코드 확인", description = """

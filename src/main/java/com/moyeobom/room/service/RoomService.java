@@ -30,6 +30,7 @@ import com.moyeobom.room.websocket.ConnectionRegistry;
 import com.moyeobom.task.domain.TaskCounts;
 import com.moyeobom.task.service.TaskQueryService;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
@@ -64,6 +65,8 @@ public class RoomService {
     private final TaskScheduler taskScheduler;
     private final RandomGenerator random;
     private final Clock clock;
+    /** 서버가 켜진 시각. 사라진 방을 복구할 수 있는 시간을 여기서부터 잰다 */
+    private final Instant startedAt;
 
     public RoomService(RoomRegistry roomRegistry, RoomMessenger messenger, MateScheduler mateScheduler,
                        FocusService focusService, TaskQueryService taskQueryService,
@@ -80,6 +83,7 @@ public class RoomService {
         this.taskScheduler = taskScheduler;
         this.random = random;
         this.clock = clock;
+        this.startedAt = clock.instant();
     }
 
     /**
@@ -87,10 +91,51 @@ public class RoomService {
      */
     public RoomEnterResponse create(Long guestId, int virtualSeats, int realSeats, boolean matesAlwaysFocus,
                                     boolean matesStay) {
-        int total = virtualSeats + realSeats;
-        if (realSeats < 1 || virtualSeats < 0 || total > Room.MAX_SEAT_COUNT) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "실제 자리는 1명 이상, 합계는 9명까지 고를 수 있어요.");
+        validateSeats(virtualSeats, realSeats);
+        return open(guestId, virtualSeats, realSeats, matesAlwaysFocus, matesStay, null);
+    }
+
+    /**
+     * 서버가 다시 켜져 사라진 열람실을 같은 코드로 다시 연다. 같이 쓰던 사람들이 각자 부르면 같은 방에 다시 모인다.
+     * <ul>
+     *   <li>이미 방에 있으면 그 방을 돌려준다.</li>
+     *   <li>서버가 켜진 뒤 restoreWindow 안에만 된다. 방이 사라지는 것은 서버가 다시 켜질 때뿐이다.</li>
+     *   <li>같은 코드로 복구된 방이 있으면 그 방에 들어가고, 원래 방 주인이면 주인을 돌려받는다.</li>
+     *   <li>같은 코드의 보통 방이 열려 있으면 들어가지 않고 새 코드로 연다. 코드 대입 제한을 이 경로로 피하지 못하게 한다.</li>
+     * </ul>
+     */
+    public RoomEnterResponse restore(Long guestId, String rawCode, int virtualSeats, int realSeats,
+                                     boolean matesAlwaysFocus, boolean matesStay, boolean wasOwner) {
+        validateSeats(virtualSeats, realSeats);
+        String code = RoomCodes.normalize(rawCode);
+        synchronized (this) {
+            Optional<Room> current = roomRegistry.findByGuestId(guestId);
+            if (current.isPresent()) {
+                return responseOf(current.get(), guestId);
+            }
+            if (!clock.instant().isBefore(startedAt.plus(properties.restoreWindow()))) {
+                throw new BusinessException(ErrorCode.ROOM_RESTORE_EXPIRED);
+            }
+            Optional<Room> existing = roomRegistry.findByCode(code);
+            if (existing.isPresent() && existing.get().isRestored()) {
+                Room room = existing.get();
+                join(guestId, code);
+                if (wasOwner) {
+                    room.withLock(() -> {
+                        room.assignOwner(guestId);
+                        messenger.toRoom(room, RoomEventType.ROOM_SETTINGS_CHANGED, null, settingsOf(room));
+                    });
+                }
+                return responseOf(room, guestId);
+            }
+            boolean codeFree = existing.isEmpty() && RoomCodes.isValid(code);
+            return open(guestId, virtualSeats, realSeats, matesAlwaysFocus, matesStay, codeFree ? code : null);
         }
+    }
+
+    /** 방을 열고 들어간다. restoredCode가 있으면 그 코드로 연 복구된 방이 된다 */
+    private RoomEnterResponse open(Long guestId, int virtualSeats, int realSeats, boolean matesAlwaysFocus,
+                                   boolean matesStay, String restoredCode) {
         Occupant me = newMember(guestId);
         Room room;
         synchronized (this) {
@@ -99,7 +144,10 @@ public class RoomService {
                 throw new BusinessException(ErrorCode.ROOM_LIMIT_REACHED);
             }
             leaveCurrent(guestId);
-            room = Room.create(newRoomId(), newCode(), virtualSeats, realSeats, random);
+            room = Room.create(newRoomId(), restoredCode != null ? restoredCode : newCode(), virtualSeats, realSeats, random);
+            if (restoredCode != null) {
+                room.markRestored();
+            }
             room.withLock(() -> {
                 room.addMember(guestId, pickWaitingSeat(room), me);
                 room.assignOwner(guestId);
@@ -110,8 +158,16 @@ public class RoomService {
             roomRegistry.register(room);
             roomRegistry.joined(guestId, room);
         }
-        log.debug("열람실 생성 roomId={}, code={}, 가상 {}, 실제 {}", room.getRoomId(), room.getCode(), virtualSeats, realSeats);
+        log.debug("열람실 생성 roomId={}, code={}, 가상 {}, 실제 {}, 복구 {}", room.getRoomId(), room.getCode(), virtualSeats,
+                realSeats, restoredCode != null);
         return responseOf(room, guestId);
+    }
+
+    private static void validateSeats(int virtualSeats, int realSeats) {
+        int total = virtualSeats + realSeats;
+        if (realSeats < 1 || virtualSeats < 0 || total > Room.MAX_SEAT_COUNT) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "실제 자리는 1명 이상, 합계는 9명까지 고를 수 있어요.");
+        }
     }
 
     /**

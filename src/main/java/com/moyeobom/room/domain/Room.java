@@ -48,6 +48,9 @@ public class Room {
     /** 가상 메이트가 자리를 뜨지 않는다 */
     @Getter
     private boolean matesStay;
+    /** 서버가 다시 켜진 뒤 사라진 방을 같은 코드로 다시 연 방. 같이 쓰던 사람만 복구로 다시 들어올 수 있다 */
+    @Getter
+    private boolean restored;
 
     private Room(String roomId, String code, List<Seat> seats) {
         this.roomId = roomId;
@@ -155,6 +158,11 @@ public class Room {
         Seat seat = seat(seatNo);
         seat.leave();
         return Optional.of(seat);
+    }
+
+    /** 복구로 다시 연 방으로 표시한다 */
+    public void markRestored() {
+        this.restored = true;
     }
 
     /** 방 주인을 정한다(락 안에서). 방을 만든 사람이다 */

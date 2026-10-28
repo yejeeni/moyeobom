@@ -20,7 +20,7 @@ class CodeAttemptLimiterTest {
     @Test
     void 없는_코드만_실패로_세고_정해진_횟수를_넘으면_맞는_코드도_잠시_막힌다() {
         CodeAttemptLimiter limiter = new CodeAttemptLimiter(new MutableClock(Instant.parse("2026-10-10T00:00:00Z")),
-                new RoomProperties(Duration.ofSeconds(60), 500, new RoomProperties.CodeAttempts(3, Duration.ofMinutes(10))));
+                new RoomProperties(Duration.ofSeconds(60), 500, new RoomProperties.CodeAttempts(3, Duration.ofMinutes(10)), null));
 
         // 맞는 코드와 자리 다 참은 세지 않는다
         for (int i = 0; i < 5; i++) {

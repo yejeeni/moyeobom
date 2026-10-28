@@ -1,3 +1,4 @@
+import type { LastRoom } from '../lib/lastRoom'
 import { request } from './client'
 import type {
   CarriedTask,
@@ -45,6 +46,8 @@ export const api = {
     request<RoomEnter>('POST', '/rooms', { virtualSeats, realSeats, ...mates }),
   /** 보낸 항목만 바뀐다 */
   changeRoomSettings: (change: Partial<MateSettings>) => request<RoomSettings>('PATCH', '/rooms/current/settings', change),
+  /** 서버가 다시 켜져 사라진 방을 같은 코드로 되살린다 */
+  restoreRoom: (last: LastRoom) => request<RoomEnter>('POST', '/rooms/restore', last),
   joinRoom: (code: string) => request<RoomEnter>('POST', '/rooms/join', { code }),
   lookupRoom: (code: string) => request<RoomLookup>('GET', `/rooms/lookup?code=${encodeURIComponent(code)}`),
   currentRoom: () => request<RoomEnter>('GET', '/rooms/current'),

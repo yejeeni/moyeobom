@@ -37,6 +37,8 @@ moyeobom:
     code-attempts:
       max-failures: 10
       window: PT10M
+    # 서버가 다시 켜진 뒤 사라진 열람실을 같은 코드로 되살릴 수 있는 시간
+    restore-window: PT10M
   # 가상 메이트 행동 규칙. 코드 수정 없이 조정할 수 있도록 설정으로 뺀다.
   mate:
     focus-duration:
